@@ -6,6 +6,12 @@ Coach-first soccer analysis dashboard for live match tracking, post-game analysi
 
 Open `index.html` in a browser to view the frontend prototype.
 
+## Supabase setup
+
+1. In the Supabase project dashboard, open **SQL Editor** and run `supabase/migrations/20260823_initial_schema.sql`.
+2. In **Project Settings → API Keys**, copy the Project URL and **Publishable key** (not the secret/service-role key).
+3. Share the Project URL and Publishable key when ready so the frontend can be connected. The secret/service-role key must never be placed in browser code or committed to Git.
+
 ## Duels MVP
 
 The first Duels workflow is designed for coach review:
