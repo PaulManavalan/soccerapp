@@ -1,0 +1,22 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+dist/
+.next/
+coverage/
+
+# Video and generated media — never commit match footage
+videos/
+clips/
+*.mp4
+*.mov
+*.m4v
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.vscode/
