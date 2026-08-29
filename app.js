@@ -2,11 +2,11 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './supabase.config.js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-const markers = [...document.querySelectorAll('.duel-marker')];
+let markers = [];
 const filters = ['duelPlayer', 'duelType', 'duelOutcome'];
 const storageKey = 'touchline-duel-review-v1';
 const stored = JSON.parse(localStorage.getItem(storageKey) || '{}');
-let selected = markers[0] || null;
+let selected = null;
 
 const authGate = document.getElementById('authGate');
 const authForm = document.getElementById('authForm');
@@ -71,6 +71,7 @@ async function loadTeamData() {
     activeLineupIds = new Set((lineup ?? []).map(row => row.player_id));
   }
   renderMatchSetup();
+  renderManagerView();
   renderTeamSettings();
   renderDuelPlayerOptions();
   updateMatchContext();
@@ -93,6 +94,69 @@ function renderMatchSetup() {
   state.textContent = currentMatch ? `${currentMatch.status} · vs ${currentMatch.opponent_name}` : 'No active match';
   state.className = `status ${currentMatch?.status === 'live' ? 'good' : 'watch'}`;
   document.querySelectorAll('#lineupPicker input').forEach(input => input.addEventListener('change', () => { input.checked ? activeLineupIds.add(input.value) : activeLineupIds.delete(input.value); count.textContent = `${activeLineupIds.size} selected`; }));
+}
+const formationSlots = [
+  [50, 88], [17, 67], [39, 69], [61, 69], [83, 67], [26, 43],
+  [50, 38], [74, 43], [20, 16], [50, 12], [80, 16]
+];
+function getMatchMinutes() {
+  if (!currentMatch || currentMatch.status !== 'live') return 0;
+  return Math.max(0, Math.min(130, Math.floor((Date.now() - new Date(currentMatch.started_at).getTime()) / 60000)));
+}
+function playerInitials(name) {
+  return name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
+}
+function selectManagerPlayer(player, minutes) {
+  const card = document.getElementById('selectedPlayer');
+  card.querySelector('.selected-number').textContent = player.shirt_number;
+  card.querySelector('.eyebrow').textContent = player.position || 'Player';
+  card.querySelector('h2').innerHTML = '';
+  card.querySelector('h2').append(document.createTextNode(`${player.name} `));
+  const rating = document.createElement('span');
+  rating.textContent = minutes ? '6.5' : '—';
+  card.querySelector('h2').append(rating);
+  card.querySelector('small').textContent = `${minutes} minutes played`;
+  document.getElementById('statMinutes').textContent = `${minutes}'`;
+  document.getElementById('statPasses').textContent = '0 / 0';
+  document.getElementById('statShots').textContent = '0';
+  document.getElementById('statTackles').textContent = '0';
+}
+function renderManagerView() {
+  const pitch = document.querySelector('.formation-pitch');
+  const benchPanel = document.querySelector('.bench-panel');
+  pitch.querySelectorAll('.formation-player').forEach(player => player.remove());
+  benchPanel.querySelectorAll('.bench-player').forEach(player => player.remove());
+  const matchdayPlayers = activeLineupIds.size ? roster.filter(player => activeLineupIds.has(player.id)) : roster;
+  const minutes = getMatchMinutes();
+  matchdayPlayers.slice(0, formationSlots.length).forEach((player, index) => {
+    const [x, y] = formationSlots[index];
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = `formation-player${index === 0 ? ' active' : ''}`;
+    button.style.setProperty('--x', `${x}%`); button.style.setProperty('--y', `${y}%`);
+    const number = document.createElement('span'); number.textContent = player.shirt_number;
+    const name = document.createElement('b'); name.textContent = player.name;
+    const rating = document.createElement('small'); rating.textContent = minutes ? '6.5' : '—';
+    button.append(number, name, rating);
+    button.addEventListener('click', () => { pitch.querySelectorAll('.formation-player').forEach(item => item.classList.remove('active')); button.classList.add('active'); selectManagerPlayer(player, minutes); });
+    pitch.append(button);
+  });
+  const lineupIds = new Set(matchdayPlayers.map(player => player.id));
+  roster.filter(player => !lineupIds.has(player.id)).forEach(player => {
+    const row = document.createElement('div'); row.className = 'bench-player';
+    const avatar = document.createElement('span'); avatar.className = 'avatar'; avatar.textContent = playerInitials(player.name);
+    const details = document.createElement('div');
+    const name = document.createElement('strong'); name.textContent = player.name;
+    const position = document.createElement('small'); position.textContent = `${player.position || 'Player'} · 0 min`;
+    details.append(name, position);
+    const action = document.createElement('button'); action.type = 'button'; action.textContent = 'Bring on';
+    row.append(avatar, details, action);
+    benchPanel.insertBefore(row, benchPanel.querySelector('.minutes-note'));
+  });
+  if (matchdayPlayers.length) selectManagerPlayer(matchdayPlayers[0], minutes);
+  else {
+    document.getElementById('selectedPlayer').querySelector('.eyebrow').textContent = 'No players selected';
+    document.getElementById('selectedPlayer').querySelector('h2').textContent = 'Set up your roster';
+  }
 }
 function renderTeamSettings() {
   document.getElementById('settingsTeamName').value = currentTeam?.name || '';
@@ -131,7 +195,10 @@ function createMarkerFromDuel(duel, player = null) {
   return marker;
 }
 async function loadMatchDuels() {
-  if (!currentMatch) return;
+  document.querySelectorAll('.duel-marker').forEach(marker => marker.remove());
+  markers = [];
+  selected = null;
+  if (!currentMatch) { updateTotal(); renderDetail(null); return; }
   const { data: savedDuels, error } = await supabase.from('duels').select('id,player_id,occurred_at_seconds,pitch_x,pitch_y,duel_type,outcome,suggested_outcome,confidence,review_status').eq('match_id', currentMatch.id);
   if (error) return;
   savedDuels.forEach(duel => {
@@ -140,7 +207,7 @@ async function loadMatchDuels() {
       return minutes * 60 + seconds === duel.occurred_at_seconds;
     });
     const player = roster.find(item => item.id === duel.player_id);
-    if (!marker) { createMarkerFromDuel(duel, player); return; }
+    if (!marker) { const createdMarker = createMarkerFromDuel(duel, player); if (!selected) selected = createdMarker; return; }
     marker.dataset.duelId = duel.id;
     marker.dataset.outcome = duel.outcome;
     marker.dataset.type = duel.duel_type;
@@ -275,7 +342,7 @@ document.getElementById('duelLogForm').addEventListener('submit', async event =>
   if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
   const player = roster.find(item => item.id === playerId);
   const marker = createMarkerFromDuel({ ...duel, zone: zone.label }, player);
-  marker.dataset.zone = zone.label; status.textContent = `Duel added at ${timeLabel(payload.occurred_at_seconds)}.`; event.target.reset(); renderDetail(marker); filterMarkers();
+  marker.dataset.zone = zone.label; status.textContent = `Duel added at ${timeLabel(payload.occurred_at_seconds)}.`; event.target.reset(); updateTotal(); renderDetail(marker); filterMarkers();
 });
 
 markers.forEach(marker => { marker.dataset.initialOutcome = marker.dataset.outcome; });
@@ -293,13 +360,13 @@ async function save(marker, reviewStatus = 'confirmed') {
   marker.dataset.duelId = data.id;
   document.getElementById('reviewNote').textContent = 'Coach-reviewed event saved to this match.';
 }
-function updateTotal() { const total = 46; const won = 28 + markers.reduce((change, marker) => marker.dataset.outcome === marker.dataset.initialOutcome ? change : change + (marker.dataset.outcome === 'won' ? 1 : -1), 0); document.getElementById('duelTeamTotal').innerHTML = `${won} <i>/ ${total}</i>`; document.querySelector('.duel-total small').textContent = `${Math.round((won / total) * 100)}% · target 58%`; }
-function renderDetail(marker) { if (!marker) return; selected = marker; markers.forEach(item => item.classList.toggle('selected', item === marker)); const data = marker.dataset; const won = data.outcome === 'won'; const confirmed = data.confirmed === 'true'; document.getElementById('duelDetailTitle').textContent = `${data.player} · ${won ? 'Won' : 'Lost'}`; const confidence = document.getElementById('duelConfidence'); confidence.textContent = confirmed ? 'Confirmed' : `${data.confidence}% confidence`; confidence.className = `status ${confirmed || data.confidence >= 75 ? 'good' : 'watch'}`; document.getElementById('duelClipLabel').textContent = confirmed ? 'Coach reviewed' : 'Suggested event'; document.getElementById('duelClipTime').textContent = data.time; document.getElementById('duelPlayerName').textContent = `#${data.number} ${data.player}`; document.getElementById('duelDetailType').textContent = `${data.type[0].toUpperCase()}${data.type.slice(1)} duel`; document.getElementById('duelLocation').textContent = data.zone; const outcome = document.getElementById('duelDetailOutcome'); outcome.textContent = won ? 'Won · retained possession' : 'Lost · opponent progressed'; outcome.className = won ? 'outcome-won' : 'outcome-lost'; document.getElementById('confirmDuel').textContent = confirmed ? 'Confirmed' : 'Confirm result'; document.getElementById('reviewNote').textContent = confirmed ? (data.duelId ? 'Coach-reviewed event saved to this match.' : 'Coach-reviewed event. Create a match to sync it to Supabase.') : 'Suggested event — confirm it or make a correction.'; document.getElementById('correctionPanel').hidden = true; }
+function updateTotal() { const total = markers.length; const won = markers.filter(marker => marker.dataset.outcome === 'won').length; document.getElementById('duelTeamTotal').innerHTML = `${won} <i>/ ${total}</i>`; document.querySelector('.duel-total small').textContent = total ? `${Math.round((won / total) * 100)}% · target 58%` : 'No duels logged yet'; }
+function renderDetail(marker) { const confirm = document.getElementById('confirmDuel'); const change = document.getElementById('changeDuel'); if (!marker) { document.getElementById('duelDetailTitle').textContent = 'No duels logged yet'; document.getElementById('duelConfidence').textContent = 'Waiting for an event'; document.getElementById('duelClipLabel').textContent = 'Log a duel to review it here'; document.getElementById('duelClipTime').textContent = '—'; document.getElementById('duelPlayerName').textContent = '—'; document.getElementById('duelDetailType').textContent = '—'; document.getElementById('duelLocation').textContent = '—'; document.getElementById('duelDetailOutcome').textContent = '—'; confirm.disabled = true; change.disabled = true; return; } confirm.disabled = false; change.disabled = false; selected = marker; markers.forEach(item => item.classList.toggle('selected', item === marker)); const data = marker.dataset; const won = data.outcome === 'won'; const confirmed = data.confirmed === 'true'; document.getElementById('duelDetailTitle').textContent = `${data.player} · ${won ? 'Won' : 'Lost'}`; const confidence = document.getElementById('duelConfidence'); confidence.textContent = confirmed ? 'Confirmed' : `${data.confidence}% confidence`; confidence.className = `status ${confirmed || data.confidence >= 75 ? 'good' : 'watch'}`; document.getElementById('duelClipLabel').textContent = confirmed ? 'Coach reviewed' : 'Suggested event'; document.getElementById('duelClipTime').textContent = data.time; document.getElementById('duelPlayerName').textContent = `#${data.number} ${data.player}`; document.getElementById('duelDetailType').textContent = `${data.type[0].toUpperCase()}${data.type.slice(1)} duel`; document.getElementById('duelLocation').textContent = data.zone; const outcome = document.getElementById('duelDetailOutcome'); outcome.textContent = won ? 'Won · retained possession' : 'Lost · opponent progressed'; outcome.className = won ? 'outcome-won' : 'outcome-lost'; confirm.textContent = confirmed ? 'Confirmed' : 'Confirm result'; document.getElementById('reviewNote').textContent = confirmed ? (data.duelId ? 'Coach-reviewed event saved to this match.' : 'Coach-reviewed event. Create a match to sync it to Supabase.') : 'Suggested event — confirm it or make a correction.'; document.getElementById('correctionPanel').hidden = true; }
 function filterMarkers() { const player = document.getElementById('duelPlayer').value, type = document.getElementById('duelType').value, outcome = document.getElementById('duelOutcome').value; markers.forEach(marker => { marker.hidden = !((player === 'all' || marker.dataset.player === player) && (type === 'all' || marker.dataset.type === type) && (outcome === 'all' || marker.dataset.outcome === outcome)); }); }
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => { document.querySelectorAll('.tab,.tab-view').forEach(element => element.classList.remove('active')); tab.classList.add('active'); document.getElementById(tab.dataset.tab).classList.add('active'); }));
 document.querySelectorAll('.formation-player').forEach(player => player.addEventListener('click', () => { document.querySelectorAll('.formation-player').forEach(item => item.classList.remove('active')); player.classList.add('active'); const data = player.dataset; const card = document.getElementById('selectedPlayer'); card.querySelector('.selected-number').textContent = data.number; card.querySelector('.eyebrow').textContent = data.position; card.querySelector('h2').innerHTML = `${data.name} <span>${data.rating}</span>`; card.querySelector('small').textContent = `${data.minutes} minutes played`; document.getElementById('statMinutes').textContent = `${data.minutes}'`; document.getElementById('statPasses').textContent = data.passes; document.getElementById('statShots').textContent = data.shots; document.getElementById('statTackles').textContent = data.tackles; }));
 markers.forEach(marker => { applyStored(marker); attachDuelMarker(marker); }); filters.forEach(id => document.getElementById(id).addEventListener('change', filterMarkers));
-document.getElementById('confirmDuel').addEventListener('click', async () => { selected.dataset.confirmed = 'true'; await save(selected); renderDetail(selected); });
+document.getElementById('confirmDuel').addEventListener('click', async () => { if (!selected) return; selected.dataset.confirmed = 'true'; await save(selected); renderDetail(selected); });
 document.getElementById('changeDuel').addEventListener('click', () => { const panel = document.getElementById('correctionPanel'); panel.hidden = !panel.hidden; });
 document.querySelectorAll('[data-correction]').forEach(button => button.addEventListener('click', async () => { selected.dataset.outcome = button.dataset.correction; selected.dataset.confirmed = 'true'; selected.classList.toggle('won', selected.dataset.outcome === 'won'); selected.classList.toggle('lost', selected.dataset.outcome === 'lost'); await save(selected, 'corrected'); updateTotal(); filterMarkers(); renderDetail(selected); }));
 document.querySelectorAll('[data-correction-type]').forEach(button => button.addEventListener('click', async () => { selected.dataset.type = button.dataset.correctionType; selected.dataset.confirmed = 'true'; selected.classList.toggle('ground', selected.dataset.type === 'ground'); selected.classList.toggle('aerial', selected.dataset.type === 'aerial'); await save(selected, 'corrected'); filterMarkers(); renderDetail(selected); }));
