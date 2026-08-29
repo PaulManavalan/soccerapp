@@ -3,18 +3,33 @@
 
 create extension if not exists pgcrypto;
 
-create type public.duel_type as enum ('ground', 'aerial');
-create type public.duel_outcome as enum ('won', 'lost');
-create type public.duel_review_status as enum ('suggested', 'confirmed', 'corrected');
-create type public.team_role as enum ('coach', 'assistant_coach');
+do $$ begin
+  create type public.duel_type as enum ('ground', 'aerial');
+exception when duplicate_object then null;
+end $$;
 
-create table public.teams (
+do $$ begin
+  create type public.duel_outcome as enum ('won', 'lost');
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.duel_review_status as enum ('suggested', 'confirmed', 'corrected');
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.team_role as enum ('coach', 'assistant_coach');
+exception when duplicate_object then null;
+end $$;
+
+create table if not exists public.teams (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   created_at timestamptz not null default now()
 );
 
-create table public.team_members (
+create table if not exists public.team_members (
   team_id uuid not null references public.teams(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   role public.team_role not null default 'coach',
@@ -22,7 +37,7 @@ create table public.team_members (
   primary key (team_id, user_id)
 );
 
-create table public.players (
+create table if not exists public.players (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null references public.teams(id) on delete cascade,
   name text not null,
@@ -32,7 +47,7 @@ create table public.players (
   unique (team_id, shirt_number)
 );
 
-create table public.matches (
+create table if not exists public.matches (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null references public.teams(id) on delete cascade,
   opponent_name text not null,
@@ -41,7 +56,7 @@ create table public.matches (
   created_at timestamptz not null default now()
 );
 
-create table public.duels (
+create table if not exists public.duels (
   id uuid primary key default gen_random_uuid(),
   match_id uuid not null references public.matches(id) on delete cascade,
   player_id uuid references public.players(id) on delete set null,
@@ -58,10 +73,10 @@ create table public.duels (
   updated_at timestamptz not null default now()
 );
 
-create index players_team_id_idx on public.players(team_id);
-create index matches_team_id_idx on public.matches(team_id);
-create index duels_match_id_idx on public.duels(match_id);
-create index duels_player_id_idx on public.duels(player_id);
+create index if not exists players_team_id_idx on public.players(team_id);
+create index if not exists matches_team_id_idx on public.matches(team_id);
+create index if not exists duels_match_id_idx on public.duels(match_id);
+create index if not exists duels_player_id_idx on public.duels(player_id);
 
 -- RLS is enabled before the app is connected. No browser client can read or
 -- modify these tables until the next migration adds authenticated coach policies.
