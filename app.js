@@ -33,6 +33,9 @@ function setAuthStatus(message, isError = false) {
   authStatus.textContent = message;
   authStatus.classList.toggle('is-error', isError);
 }
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+}
 function setSession(session) {
   currentUser = session?.user ?? null;
   authGate.hidden = Boolean(session);
@@ -88,12 +91,22 @@ function renderMatchSetup() {
   const picker = document.getElementById('lineupPicker');
   const count = document.getElementById('lineupCount');
   const state = document.getElementById('matchState');
+  const opponent = document.getElementById('matchOpponent');
+  const kickoff = document.getElementById('matchKickoff');
+  const matchStatus = document.getElementById('matchStatus');
+  const submit = document.querySelector('#matchForm button[type="submit"]');
   if (!roster.length) picker.innerHTML = '<p class="empty-lineup">Your roster will appear here after team setup.</p>';
-  else picker.innerHTML = roster.map(player => `<label class="lineup-choice"><input type="checkbox" value="${player.id}" ${activeLineupIds.has(player.id) ? 'checked' : ''}><strong>#${player.shirt_number} ${player.name}</strong><small>${player.position || 'Player'}</small></label>`).join('');
+  else picker.innerHTML = roster.map(player => `<label class="lineup-choice"><input type="checkbox" value="${player.id}" ${activeLineupIds.has(player.id) ? 'checked' : ''}><strong>#${player.shirt_number} ${escapeHtml(player.name)}</strong><small>${escapeHtml(player.position || 'Player')}</small></label>`).join('');
   count.textContent = `${activeLineupIds.size} selected`;
   state.textContent = currentMatch ? `${currentMatch.status} · vs ${currentMatch.opponent_name}` : 'No active match';
   state.className = `status ${currentMatch?.status === 'live' ? 'good' : 'watch'}`;
-  document.querySelectorAll('#lineupPicker input').forEach(input => input.addEventListener('change', () => { input.checked ? activeLineupIds.add(input.value) : activeLineupIds.delete(input.value); count.textContent = `${activeLineupIds.size} selected`; }));
+  if (currentMatch) {
+    opponent.value = currentMatch.opponent_name;
+    kickoff.value = new Date(currentMatch.started_at).toISOString().slice(0, 16);
+    matchStatus.value = currentMatch.status;
+    submit.innerHTML = 'Save match changes <span>→</span>';
+  } else submit.innerHTML = 'Create match <span>→</span>';
+  document.querySelectorAll('#lineupPicker input').forEach(input => input.addEventListener('change', () => { input.checked ? activeLineupIds.add(input.value) : activeLineupIds.delete(input.value); count.textContent = `${activeLineupIds.size} selected`; renderManagerView(); }));
 }
 const formationSlots = [
   [50, 88], [17, 67], [39, 69], [61, 69], [83, 67], [26, 43],
@@ -162,7 +175,23 @@ function renderTeamSettings() {
   document.getElementById('settingsTeamName').value = currentTeam?.name || '';
   const manager = document.getElementById('rosterManager');
   if (!roster.length) { manager.innerHTML = '<p class="empty-lineup">Your roster will appear here.</p>'; return; }
-  manager.innerHTML = roster.map(player => `<div class="roster-row"><b>#${player.shirt_number}</b><strong>${player.name}</strong><small>${player.position || 'Player'}</small><button type="button" data-remove-player="${player.id}">Remove</button></div>`).join('');
+  manager.innerHTML = roster.map(player => `<div class="roster-row"><b>#${player.shirt_number}</b><strong>${escapeHtml(player.name)}</strong><small>${escapeHtml(player.position || 'Player')}</small><button type="button" data-edit-player="${player.id}">Edit</button><button type="button" data-remove-player="${player.id}">Remove</button></div>`).join('');
+  document.querySelectorAll('[data-edit-player]').forEach(button => button.addEventListener('click', () => {
+    const player = roster.find(item => item.id === button.dataset.editPlayer);
+    const row = button.closest('.roster-row');
+    if (!player || !row) return;
+    row.innerHTML = `<form class="player-edit-form"><input name="number" type="number" min="1" max="99" value="${player.shirt_number}" aria-label="Shirt number" required><input name="name" value="${escapeHtml(player.name)}" aria-label="Player name" required><input name="position" value="${escapeHtml(player.position || '')}" aria-label="Position" placeholder="Position"><button type="submit">Save</button><button type="button">Cancel</button></form>`;
+    const form = row.querySelector('form');
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const values = new FormData(form);
+      const status = document.getElementById('playerFormStatus');
+      const { error } = await supabase.from('players').update({ shirt_number: Number(values.get('number')), name: values.get('name').trim(), position: values.get('position').trim() || null }).eq('id', player.id);
+      if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
+      status.classList.remove('is-error'); status.textContent = 'Player updated.'; await loadTeamData();
+    });
+    form.querySelector('button[type="button"]').addEventListener('click', () => renderTeamSettings());
+  }));
   document.querySelectorAll('[data-remove-player]').forEach(button => button.addEventListener('click', async () => {
     const player = roster.find(item => item.id === button.dataset.removePlayer);
     if (!player || !window.confirm(`Remove ${player.name} from the roster?`)) return;
@@ -173,8 +202,8 @@ function renderTeamSettings() {
   }));
 }
 function renderDuelPlayerOptions() {
-  const filterOptions = roster.map(player => `<option value="${player.name}">#${player.shirt_number} ${player.name}</option>`).join('');
-  const logOptions = roster.map(player => `<option value="${player.id}">#${player.shirt_number} ${player.name}</option>`).join('');
+  const filterOptions = roster.map(player => `<option value="${escapeHtml(player.name)}">#${player.shirt_number} ${escapeHtml(player.name)}</option>`).join('');
+  const logOptions = roster.map(player => `<option value="${player.id}">#${player.shirt_number} ${escapeHtml(player.name)}</option>`).join('');
   const logSelect = document.getElementById('duelLogPlayer');
   const filterSelect = document.getElementById('duelPlayer');
   logSelect.innerHTML = `<option value="">Select player</option>${logOptions}`;
@@ -319,13 +348,21 @@ document.getElementById('matchForm').addEventListener('submit', async event => {
   const status = document.getElementById('matchStatus').value;
   const message = document.getElementById('matchFormStatus');
   if (!currentTeam || !opponent || !startedAt || !activeLineupIds.size) { message.textContent = 'Choose an opponent, kickoff, and at least one active player.'; message.classList.add('is-error'); return; }
-  message.classList.remove('is-error'); message.textContent = 'Creating your match…';
-  const { data: match, error: matchError } = await supabase.from('matches').insert({ team_id: currentTeam.id, opponent_name: opponent, started_at: new Date(startedAt).toISOString(), status }).select().single();
+  const isUpdate = Boolean(currentMatch);
+  message.classList.remove('is-error'); message.textContent = isUpdate ? 'Saving match changes…' : 'Creating your match…';
+  const matchRequest = isUpdate
+    ? supabase.from('matches').update({ opponent_name: opponent, started_at: new Date(startedAt).toISOString(), status }).eq('id', currentMatch.id).select().single()
+    : supabase.from('matches').insert({ team_id: currentTeam.id, opponent_name: opponent, started_at: new Date(startedAt).toISOString(), status }).select().single();
+  const { data: match, error: matchError } = await matchRequest;
   if (matchError) { message.textContent = matchError.message; message.classList.add('is-error'); return; }
   const lineup = [...activeLineupIds].map(player_id => ({ match_id: match.id, player_id }));
+  if (isUpdate) {
+    const { error: clearLineupError } = await supabase.from('match_lineups').delete().eq('match_id', match.id);
+    if (clearLineupError) { message.textContent = clearLineupError.message; message.classList.add('is-error'); return; }
+  }
   const { error: lineupError } = await supabase.from('match_lineups').insert(lineup);
   if (lineupError) { message.textContent = lineupError.message; message.classList.add('is-error'); return; }
-  currentMatch = match; message.textContent = `${opponent} is ready for matchday.`; await loadTeamData();
+  currentMatch = match; message.textContent = isUpdate ? `${opponent} matchday changes saved.` : `${opponent} is ready for matchday.`; await loadTeamData();
 });
 
 document.getElementById('duelLogForm').addEventListener('submit', async event => {
