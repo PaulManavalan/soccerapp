@@ -12,9 +12,14 @@ Open `index.html` in a browser to view the frontend prototype.
 2. Then run `supabase/migrations/20260829_coach_access.sql` to add coach-scoped access and first-team onboarding.
 3. Then run `supabase/migrations/20260830_match_lineups.sql` to store each matchday lineup.
 4. Then run `supabase/migrations/20260831_match_events.sql` to enable manual in-game event tracking and player stats.
-5. In **Project Settings → API Keys**, copy the Project URL and **Publishable key** (not the secret/service-role key).
-6. Copy `supabase.config.example.js` to `supabase.config.js`, add the two values. Only the publishable key belongs in browser code.
-7. In **Authentication → Providers → Email**, keep Email enabled. For password sign-up without needing a confirmation email during testing, turn off **Confirm email**. Turn it back on and configure a reliable custom SMTP sender before inviting a real coaching staff.
+5. Then run `supabase/migrations/20260901_player_match_stats.sql` to store calculated player match stat lines and ratings.
+6. In **Project Settings → API Keys**, copy the Project URL and **Publishable key** (not the secret/service-role key).
+7. Copy `supabase.config.example.js` to `supabase.config.js`, add the two values. Only the publishable key belongs in browser code.
+8. In **Authentication → Providers → Email**, keep Email enabled. For password sign-up without needing a confirmation email during testing, turn off **Confirm email**. Turn it back on and configure a reliable custom SMTP sender before inviting a real coaching staff.
+
+## Initial rating model
+
+Players start at 6.0 when they play. The initial model adds value for goals (+1.25), shots on target (+0.15), completed passes (+0.02), tackles won (+0.18), interceptions (+0.14), clearances (+0.07), possession wins (+0.10), and duels won (+0.12). It deducts for incomplete passes (-0.025), tackles lost (-0.12), possession losses (-0.08), duels lost (-0.10), fouls committed (-0.08), yellow cards (-0.30), and red cards (-1.50). Ratings are capped from 1.0 to 10.0.
 
 The app now uses an email-and-password sign-in flow. New coaches choose **Create an account** on the sign-in screen; passwords must be at least eight characters.
 

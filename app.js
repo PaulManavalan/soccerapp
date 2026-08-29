@@ -28,6 +28,7 @@ let roster = [];
 let currentMatch = null;
 let activeLineupIds = new Set();
 let matchEvents = [];
+let matchDuels = [];
 let authMode = 'sign-in';
 
 function setAuthStatus(message, isError = false) {
@@ -158,15 +159,25 @@ function selectManagerPlayer(player, minutes) {
   document.getElementById('statShots').textContent = stats.shots;
   document.getElementById('statTackles').textContent = stats.tacklesWon;
 }
-function getPlayerEventStats(playerId, minutes = getMatchMinutes()) {
+function getStarterIds() {
+  const matchdayPlayers = activeLineupIds.size ? roster.filter(player => activeLineupIds.has(player.id)) : roster;
+  return new Set(arrangeMatchdaySquad(matchdayPlayers).starters.map(player => player.id));
+}
+function getPlayerMinutes(playerId) {
+  return getStarterIds().has(playerId) ? getMatchMinutes() : 0;
+}
+function getPlayerEventStats(playerId, minutes = getPlayerMinutes(playerId)) {
   const events = matchEvents.filter(event => event.player_id === playerId);
+  const duels = matchDuels.filter(duel => duel.player_id === playerId);
   const count = type => events.filter(event => event.event_type === type).length;
   const completedPasses = count('pass_complete');
   const totalPasses = completedPasses + count('pass_incomplete');
   const shots = count('shot_on_target') + count('shot_off_target') + count('goal');
   const tacklesWon = count('tackle_won');
-  const ratingValue = Math.max(1, Math.min(10, 6 + count('goal') * 1.1 + count('shot_on_target') * .15 + completedPasses * .025 + tacklesWon * .12 + count('interception') * .1 + count('clearance') * .05 - count('pass_incomplete') * .025 - count('tackle_lost') * .12 - count('yellow_card') * .3 - count('red_card') * 1.5));
-  return { completedPasses, totalPasses, shots, tacklesWon, rating: minutes ? ratingValue.toFixed(1) : '—' };
+  const duelsWon = duels.filter(duel => duel.outcome === 'won').length;
+  const duelsLost = duels.filter(duel => duel.outcome === 'lost').length;
+  const ratingValue = minutes ? Math.max(1, Math.min(10, 6 + count('goal') * 1.25 + count('shot_on_target') * .15 + completedPasses * .02 + tacklesWon * .18 + count('interception') * .14 + count('clearance') * .07 + count('possession_won') * .1 + duelsWon * .12 + count('foul_won') * .05 - count('pass_incomplete') * .025 - count('tackle_lost') * .12 - count('possession_lost') * .08 - duelsLost * .1 - count('foul_committed') * .08 - count('yellow_card') * .3 - count('red_card') * 1.5)) : null;
+  return { completedPasses, totalPasses, shots, shotsOnTarget: count('shot_on_target') + count('goal'), tacklesWon, tacklesLost: count('tackle_lost'), interceptions: count('interception'), clearances: count('clearance'), duelsWon, duelsLost, possessionWon: count('possession_won'), possessionLost: count('possession_lost'), foulsCommitted: count('foul_committed'), foulsWon: count('foul_won'), yellowCards: count('yellow_card'), redCards: count('red_card'), rating: ratingValue ? ratingValue.toFixed(1) : '—', ratingValue };
 }
 function renderManagerView() {
   const pitch = document.querySelector('.formation-pitch');
@@ -295,6 +306,29 @@ async function loadMatchEvents() {
   matchEvents = data ?? [];
   renderLiveStats(); renderEventTimeline(); renderManagerView();
 }
+async function syncPlayerMatchStats() {
+  if (!currentMatch) return;
+  const playerIds = new Set([...activeLineupIds, ...matchEvents.map(event => event.player_id), ...matchDuels.map(duel => duel.player_id)].filter(Boolean));
+  if (!playerIds.size) return;
+  const rows = [...playerIds].map(playerId => {
+    const stats = getPlayerEventStats(playerId);
+    return {
+      match_id: currentMatch.id, player_id: playerId, minutes_played: getPlayerMinutes(playerId),
+      goals: matchEvents.filter(event => event.player_id === playerId && event.event_type === 'goal').length,
+      shots: stats.shots, shots_on_target: stats.shotsOnTarget,
+      passes_completed: stats.completedPasses, passes_attempted: stats.totalPasses,
+      tackles_won: stats.tacklesWon, tackles_lost: stats.tacklesLost,
+      interceptions: stats.interceptions, clearances: stats.clearances,
+      duels_won: stats.duelsWon, duels_lost: stats.duelsLost,
+      possession_won: stats.possessionWon, possession_lost: stats.possessionLost,
+      fouls_committed: stats.foulsCommitted, fouls_won: stats.foulsWon,
+      yellow_cards: stats.yellowCards, red_cards: stats.redCards,
+      rating: stats.ratingValue, updated_at: new Date().toISOString()
+    };
+  });
+  const { error } = await supabase.from('player_match_stats').upsert(rows, { onConflict: 'match_id,player_id' });
+  if (error) console.warn('Player match stat sync failed:', error.message);
+}
 function timeLabel(totalSeconds) {
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }
@@ -313,9 +347,11 @@ async function loadMatchDuels() {
   document.querySelectorAll('.duel-marker').forEach(marker => marker.remove());
   markers = [];
   selected = null;
+  matchDuels = [];
   if (!currentMatch) { updateTotal(); renderDetail(null); return; }
   const { data: savedDuels, error } = await supabase.from('duels').select('id,player_id,occurred_at_seconds,pitch_x,pitch_y,duel_type,outcome,suggested_outcome,confidence,review_status').eq('match_id', currentMatch.id);
   if (error) return;
+  matchDuels = savedDuels ?? [];
   savedDuels.forEach(duel => {
     const marker = markers.find(item => {
       const [minutes, seconds] = item.dataset.time.split(':').map(Number);
@@ -338,6 +374,7 @@ async function loadMatchDuels() {
   updateTotal();
   filterMarkers();
   renderDetail(selected);
+  renderManagerView();
 }
 async function initialiseAuth() {
   const { data, error } = await supabase.auth.getSession();
@@ -465,7 +502,8 @@ document.getElementById('duelLogForm').addEventListener('submit', async event =>
   if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
   const player = roster.find(item => item.id === playerId);
   const marker = createMarkerFromDuel({ ...duel, zone: zone.label }, player);
-  marker.dataset.zone = zone.label; status.textContent = `Duel added at ${timeLabel(payload.occurred_at_seconds)}.`; event.target.reset(); updateTotal(); renderDetail(marker); filterMarkers();
+  matchDuels.push(duel);
+  marker.dataset.zone = zone.label; status.textContent = `Duel added at ${timeLabel(payload.occurred_at_seconds)}.`; event.target.reset(); updateTotal(); renderDetail(marker); filterMarkers(); await syncPlayerMatchStats(); renderManagerView();
 });
 
 document.getElementById('eventLogForm').addEventListener('submit', async event => {
@@ -481,7 +519,7 @@ document.getElementById('eventLogForm').addEventListener('submit', async event =
   const { data, error } = await supabase.from('match_events').insert(payload).select().single();
   if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
   matchEvents.push(data); event.target.reset(); status.textContent = `${eventLabels[data.event_type]} logged at ${timeLabel(data.occurred_at_seconds)}.`;
-  renderLiveStats(); renderEventTimeline(); renderManagerView();
+  renderLiveStats(); renderEventTimeline(); await syncPlayerMatchStats(); renderManagerView();
 });
 
 markers.forEach(marker => { marker.dataset.initialOutcome = marker.dataset.outcome; });
@@ -497,6 +535,11 @@ async function save(marker, reviewStatus = 'confirmed') {
   const { data, error } = await request;
   if (error) { document.getElementById('reviewNote').textContent = `Saved locally; Supabase sync needs attention: ${error.message}`; return; }
   marker.dataset.duelId = data.id;
+  const duelIndex = matchDuels.findIndex(duel => duel.id === data.id);
+  if (duelIndex >= 0) matchDuels[duelIndex] = data;
+  else matchDuels.push(data);
+  await syncPlayerMatchStats();
+  renderManagerView();
   document.getElementById('reviewNote').textContent = 'Coach-reviewed event saved to this match.';
 }
 function updateTotal() { const total = markers.length; const won = markers.filter(marker => marker.dataset.outcome === 'won').length; document.getElementById('duelTeamTotal').innerHTML = `${won} <i>/ ${total}</i>`; document.querySelector('.duel-total small').textContent = total ? `${Math.round((won / total) * 100)}% · target 58%` : 'No duels logged yet'; }
