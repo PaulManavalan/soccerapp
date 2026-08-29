@@ -12,19 +12,34 @@ const authGate = document.getElementById('authGate');
 const authForm = document.getElementById('authForm');
 const authEmail = document.getElementById('authEmail');
 const authStatus = document.getElementById('authStatus');
+const teamOnboarding = document.getElementById('teamOnboarding');
+const teamForm = document.getElementById('teamForm');
+const teamStatus = document.getElementById('teamStatus');
+let currentUser = null;
+let currentTeam = null;
 
 function setAuthStatus(message, isError = false) {
   authStatus.textContent = message;
   authStatus.classList.toggle('is-error', isError);
 }
 function setSession(session) {
+  currentUser = session?.user ?? null;
   authGate.hidden = Boolean(session);
   document.body.classList.toggle('is-authenticated', Boolean(session));
+}
+async function loadTeamWorkspace() {
+  if (!currentUser) return;
+  const { data, error } = await supabase.from('teams').select('id,name').limit(1);
+  if (error) return setAuthStatus('Your account is signed in, but the team workspace could not load.', true);
+  currentTeam = data?.[0] ?? null;
+  teamOnboarding.hidden = Boolean(currentTeam);
+  if (currentTeam) document.querySelectorAll('.club-card strong').forEach(node => { node.textContent = currentTeam.name; });
 }
 async function initialiseAuth() {
   const { data, error } = await supabase.auth.getSession();
   if (error) setAuthStatus('Unable to connect to the sign-in service. Please try again.', true);
   setSession(data?.session);
+  await loadTeamWorkspace();
 }
 authForm.addEventListener('submit', async event => {
   event.preventDefault();
@@ -35,8 +50,24 @@ authForm.addEventListener('submit', async event => {
   if (error) return setAuthStatus(error.message, true);
   setAuthStatus(`Check ${email} for your sign-in link.`);
 });
-supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+supabase.auth.onAuthStateChange((_event, session) => { setSession(session); if (session) loadTeamWorkspace(); });
 initialiseAuth();
+
+teamForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const name = document.getElementById('teamName').value.trim();
+  const roster = document.getElementById('teamRoster').value.trim().split('\n').map(line => line.split(',').map(value => value.trim())).filter(parts => parts.length >= 2);
+  if (!name || !roster.length || !currentUser) return;
+  teamStatus.textContent = 'Creating your team workspace…';
+  const { data: team, error: teamError } = await supabase.from('teams').insert({ name, created_by: currentUser.id }).select().single();
+  if (teamError) { teamStatus.textContent = teamError.message; teamStatus.classList.add('is-error'); return; }
+  const { error: memberError } = await supabase.from('team_members').insert({ team_id: team.id, user_id: currentUser.id, role: 'coach' });
+  if (memberError) { teamStatus.textContent = memberError.message; teamStatus.classList.add('is-error'); return; }
+  const players = roster.map(([shirtNumber, playerName, position = null]) => ({ team_id: team.id, shirt_number: Number(shirtNumber), name: playerName, position }));
+  const { error: playerError } = await supabase.from('players').insert(players);
+  if (playerError) { teamStatus.textContent = playerError.message; teamStatus.classList.add('is-error'); return; }
+  currentTeam = team; teamOnboarding.hidden = true; document.querySelectorAll('.club-card strong').forEach(node => { node.textContent = team.name; });
+});
 
 markers.forEach(marker => { marker.dataset.initialOutcome = marker.dataset.outcome; });
 function applyStored(marker) { const saved = stored[marker.dataset.time]; if (!saved) return; marker.dataset.outcome = saved.outcome; marker.dataset.type = saved.type; marker.dataset.confirmed = saved.confirmed ? 'true' : ''; marker.classList.toggle('won', saved.outcome === 'won'); marker.classList.toggle('lost', saved.outcome === 'lost'); marker.classList.toggle('ground', saved.type === 'ground'); marker.classList.toggle('aerial', saved.type === 'aerial'); }
