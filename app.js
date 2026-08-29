@@ -17,6 +17,7 @@ const teamForm = document.getElementById('teamForm');
 const teamStatus = document.getElementById('teamStatus');
 let currentUser = null;
 let currentTeam = null;
+let hasTeamMembership = false;
 
 function setAuthStatus(message, isError = false) {
   authStatus.textContent = message;
@@ -32,8 +33,12 @@ async function loadTeamWorkspace() {
   const { data, error } = await supabase.from('teams').select('id,name').limit(1);
   if (error) return setAuthStatus('Your account is signed in, but the team workspace could not load.', true);
   currentTeam = data?.[0] ?? null;
-  teamOnboarding.hidden = Boolean(currentTeam);
-  if (currentTeam) document.querySelectorAll('.club-card strong').forEach(node => { node.textContent = currentTeam.name; });
+  if (currentTeam) {
+    const { data: membership } = await supabase.from('team_members').select('team_id').eq('team_id', currentTeam.id).maybeSingle();
+    hasTeamMembership = Boolean(membership);
+    document.querySelectorAll('.club-card strong').forEach(node => { node.textContent = currentTeam.name; });
+  }
+  teamOnboarding.hidden = Boolean(currentTeam && hasTeamMembership);
 }
 async function initialiseAuth() {
   const { data, error } = await supabase.auth.getSession();
@@ -59,14 +64,20 @@ teamForm.addEventListener('submit', async event => {
   const roster = document.getElementById('teamRoster').value.trim().split('\n').map(line => line.split(',').map(value => value.trim())).filter(parts => parts.length >= 2);
   if (!name || !roster.length || !currentUser) return;
   teamStatus.textContent = 'Creating your team workspace…';
-  const { data: team, error: teamError } = await supabase.from('teams').insert({ name, created_by: currentUser.id }).select().single();
-  if (teamError) { teamStatus.textContent = teamError.message; teamStatus.classList.add('is-error'); return; }
-  const { error: memberError } = await supabase.from('team_members').insert({ team_id: team.id, user_id: currentUser.id, role: 'coach' });
-  if (memberError) { teamStatus.textContent = memberError.message; teamStatus.classList.add('is-error'); return; }
+  let team = currentTeam;
+  if (!team) {
+    const { data: createdTeam, error: teamError } = await supabase.from('teams').insert({ name, created_by: currentUser.id }).select().single();
+    if (teamError) { teamStatus.textContent = teamError.message; teamStatus.classList.add('is-error'); return; }
+    team = createdTeam;
+  }
+  if (!hasTeamMembership) {
+    const { error: memberError } = await supabase.from('team_members').insert({ team_id: team.id, user_id: currentUser.id, role: 'coach' });
+    if (memberError) { teamStatus.textContent = memberError.message; teamStatus.classList.add('is-error'); return; }
+  }
   const players = roster.map(([shirtNumber, playerName, position = null]) => ({ team_id: team.id, shirt_number: Number(shirtNumber), name: playerName, position }));
   const { error: playerError } = await supabase.from('players').insert(players);
   if (playerError) { teamStatus.textContent = playerError.message; teamStatus.classList.add('is-error'); return; }
-  currentTeam = team; teamOnboarding.hidden = true; document.querySelectorAll('.club-card strong').forEach(node => { node.textContent = team.name; });
+  currentTeam = team; hasTeamMembership = true; teamOnboarding.hidden = true; document.querySelectorAll('.club-card strong').forEach(node => { node.textContent = team.name; });
 });
 
 markers.forEach(marker => { marker.dataset.initialOutcome = marker.dataset.outcome; });
