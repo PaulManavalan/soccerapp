@@ -47,7 +47,9 @@ grant select, insert, update, delete on public.teams, public.team_members, publi
 grant execute on function public.is_team_member(uuid), public.can_access_match(uuid), public.is_team_creator(uuid) to authenticated;
 
 drop policy if exists "Coaches can view their teams" on public.teams;
-create policy "Coaches can view their teams" on public.teams for select to authenticated using (public.is_team_member(id));
+create policy "Coaches can view their teams" on public.teams for select to authenticated using (
+  public.is_team_member(id) or created_by = auth.uid()
+);
 drop policy if exists "Coaches can create teams" on public.teams;
 create policy "Coaches can create teams" on public.teams for insert to authenticated with check (created_by = auth.uid());
 drop policy if exists "Owners can update teams" on public.teams;
