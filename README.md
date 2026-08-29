@@ -10,7 +10,10 @@ Open `index.html` in a browser to view the frontend prototype.
 
 1. In the Supabase project dashboard, open **SQL Editor** and run `supabase/migrations/20260823_initial_schema.sql`.
 2. In **Project Settings → API Keys**, copy the Project URL and **Publishable key** (not the secret/service-role key).
-3. Share the Project URL and Publishable key when ready so the frontend can be connected. The secret/service-role key must never be placed in browser code or committed to Git.
+3. Copy `supabase.config.example.js` to `supabase.config.js`, add the two values, and keep that local file out of Git.
+4. In **Authentication → URL Configuration**, add the deployed app URL as the Site URL and redirect URL before using magic-link sign-in.
+
+The secret/service-role key must never be placed in browser code or committed to Git.
 
 ## Duels MVP
 

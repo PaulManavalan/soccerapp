@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<section id="authGate" class="auth-gate" aria-labelledby="authTitle"><div class="auth-card"><a class="brand" href="#"><span class="brand-mark">T</span>touchline</a><p class="eyebrow">Coach access</p><h1 id="authTitle">Sign in to your team</h1><p>Use your coach email to receive a secure sign-in link.</p><form id="authForm"><label for="authEmail">Coach email</label><input id="authEmail" type="email" autocomplete="email" placeholder="coach@school.edu" required><button type="submit">Send sign-in link <span>→</span></button></form><p id="authStatus" class="auth-status" role="status">Your match data stays private to your coaching staff.</p></div></section>
 <div class="app-shell">
 <aside class="sidebar">
 <a class="brand" href="#">
@@ -585,6 +586,6 @@
 </section>
 </main>
 </div>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
