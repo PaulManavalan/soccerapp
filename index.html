@@ -67,6 +67,7 @@
 <button class="tab" data-tab="duels">Duels <span class="live-dot">
 </span>
 </button>
+<button class="tab" data-tab="settings">Settings</button>
 </nav>
 <section class="tab-view active" id="live">
 <section class="match-banner">
@@ -587,6 +588,7 @@
 <button>View clips →</button>
 </section>
 </section>
+<section class="tab-view" id="settings"><section class="settings-hero"><div><p class="eyebrow">Team workspace</p><h2>Settings &amp; roster</h2><p>Manage the team name and the players available for future matchday lineups.</p></div></section><section class="settings-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Club details</p><h2>Team name</h2></div></div><form id="teamSettingsForm" class="settings-form"><label for="settingsTeamName">Team name</label><input id="settingsTeamName" type="text" required><button type="submit">Save team name</button><p id="teamSettingsStatus" class="auth-status" role="status"></p></form></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Add a player</p><h2>Roster</h2></div></div><form id="playerForm" class="player-form"><input id="playerNumber" type="number" min="1" max="99" placeholder="#" required><input id="playerName" type="text" placeholder="Player name" required><input id="playerPosition" type="text" placeholder="Position"><button type="submit">Add player</button></form><p id="playerFormStatus" class="auth-status" role="status"></p><div id="rosterManager" class="roster-manager"><p class="empty-lineup">Your roster will appear here.</p></div></article></section></section>
 </main>
 </div>
 <script type="module" src="app.js"></script>

@@ -55,6 +55,7 @@ async function loadTeamData() {
     activeLineupIds = new Set((lineup ?? []).map(row => row.player_id));
   }
   renderMatchSetup();
+  renderTeamSettings();
   updateMatchContext();
   await loadMatchDuels();
 }
@@ -75,6 +76,20 @@ function renderMatchSetup() {
   state.textContent = currentMatch ? `${currentMatch.status} · vs ${currentMatch.opponent_name}` : 'No active match';
   state.className = `status ${currentMatch?.status === 'live' ? 'good' : 'watch'}`;
   document.querySelectorAll('#lineupPicker input').forEach(input => input.addEventListener('change', () => { input.checked ? activeLineupIds.add(input.value) : activeLineupIds.delete(input.value); count.textContent = `${activeLineupIds.size} selected`; }));
+}
+function renderTeamSettings() {
+  document.getElementById('settingsTeamName').value = currentTeam?.name || '';
+  const manager = document.getElementById('rosterManager');
+  if (!roster.length) { manager.innerHTML = '<p class="empty-lineup">Your roster will appear here.</p>'; return; }
+  manager.innerHTML = roster.map(player => `<div class="roster-row"><b>#${player.shirt_number}</b><strong>${player.name}</strong><small>${player.position || 'Player'}</small><button type="button" data-remove-player="${player.id}">Remove</button></div>`).join('');
+  document.querySelectorAll('[data-remove-player]').forEach(button => button.addEventListener('click', async () => {
+    const player = roster.find(item => item.id === button.dataset.removePlayer);
+    if (!player || !window.confirm(`Remove ${player.name} from the roster?`)) return;
+    const { error } = await supabase.from('players').delete().eq('id', player.id);
+    const status = document.getElementById('playerFormStatus');
+    if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
+    status.classList.remove('is-error'); status.textContent = `${player.name} was removed.`; await loadTeamData();
+  }));
 }
 async function loadMatchDuels() {
   if (!currentMatch) return;
@@ -142,6 +157,29 @@ teamForm.addEventListener('submit', async event => {
   if (playerError) { teamStatus.textContent = playerError.message; teamStatus.classList.add('is-error'); return; }
   currentTeam = team; hasTeamMembership = true; teamOnboarding.hidden = true;
   await loadTeamData();
+});
+
+document.getElementById('teamSettingsForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!currentTeam) return;
+  const name = document.getElementById('settingsTeamName').value.trim();
+  const status = document.getElementById('teamSettingsStatus');
+  if (!name) return;
+  const { error } = await supabase.from('teams').update({ name }).eq('id', currentTeam.id);
+  if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
+  currentTeam.name = name; status.classList.remove('is-error'); status.textContent = 'Team name saved.'; updateMatchContext();
+});
+
+document.getElementById('playerForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!currentTeam) return;
+  const shirtNumber = Number(document.getElementById('playerNumber').value);
+  const name = document.getElementById('playerName').value.trim();
+  const position = document.getElementById('playerPosition').value.trim() || null;
+  const status = document.getElementById('playerFormStatus');
+  const { error } = await supabase.from('players').insert({ team_id: currentTeam.id, shirt_number: shirtNumber, name, position });
+  if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
+  event.target.reset(); status.classList.remove('is-error'); status.textContent = `${name} was added.`; await loadTeamData();
 });
 
 document.getElementById('matchKickoff').value = new Date().toISOString().slice(0, 16);
