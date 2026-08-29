@@ -17,6 +17,7 @@ const authIntro = document.getElementById('authIntro');
 const authSubmit = document.getElementById('authSubmit');
 const authModeToggle = document.getElementById('authModeToggle');
 const authStatus = document.getElementById('authStatus');
+const signOutButton = document.getElementById('signOutButton');
 const teamOnboarding = document.getElementById('teamOnboarding');
 const teamForm = document.getElementById('teamForm');
 const teamStatus = document.getElementById('teamStatus');
@@ -178,6 +179,20 @@ authForm.addEventListener('submit', async event => {
   setAuthStatus(isSignUp ? 'Account created. Opening your team workspace…' : 'Signed in. Opening your team workspace…');
 });
 authModeToggle.addEventListener('click', () => { authMode = authMode === 'sign-in' ? 'sign-up' : 'sign-in'; renderAuthMode(); });
+signOutButton.addEventListener('click', async () => {
+  signOutButton.disabled = true;
+  const { error } = await supabase.auth.signOut();
+  signOutButton.disabled = false;
+  if (error) return setAuthStatus(error.message, true);
+  currentTeam = null;
+  currentMatch = null;
+  roster = [];
+  activeLineupIds = new Set();
+  teamOnboarding.hidden = true;
+  authPassword.value = '';
+  setSession(null);
+  setAuthStatus('You have been signed out.');
+});
 supabase.auth.onAuthStateChange((_event, session) => { setSession(session); if (session) loadTeamWorkspace(); });
 renderAuthMode();
 initialiseAuth();
