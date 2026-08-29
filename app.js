@@ -112,6 +112,27 @@ const formationSlots = [
   [50, 88], [17, 67], [39, 69], [61, 69], [83, 67], [26, 43],
   [50, 38], [74, 43], [20, 16], [50, 12], [80, 16]
 ];
+const formationRoles = [
+  { label: 'Goalkeeper', matches: /\b(gk|goalkeeper)\b/i },
+  { label: 'Left back', matches: /\b(lb|lwb|left back|left-back)\b/i },
+  { label: 'Left centre back', matches: /\b(lcb|cb|centre back|center back)\b/i },
+  { label: 'Right centre back', matches: /\b(rcb|cb|centre back|center back)\b/i },
+  { label: 'Right back', matches: /\b(rb|rwb|right back|right-back)\b/i },
+  { label: 'Defensive midfield', matches: /\b(cdm|dm|defensive midfield)\b/i },
+  { label: 'Central midfield', matches: /\b(cm|central midfield|midfielder)\b/i },
+  { label: 'Attacking midfield', matches: /\b(cam|am|attacking midfield)\b/i },
+  { label: 'Left wing', matches: /\b(lw|lwb|left wing|left winger)\b/i },
+  { label: 'Striker', matches: /\b(st|cf|striker|forward|centre forward|center forward)\b/i },
+  { label: 'Right wing', matches: /\b(rw|rwb|right wing|right winger)\b/i }
+];
+function arrangeMatchdaySquad(players) {
+  const remaining = [...players];
+  const starters = formationRoles.map(role => {
+    const index = remaining.findIndex(player => role.matches.test(player.position || ''));
+    return index >= 0 ? remaining.splice(index, 1)[0] : remaining.shift();
+  }).filter(Boolean);
+  return { starters, bench: remaining };
+}
 function getMatchMinutes() {
   if (!currentMatch || currentMatch.status !== 'live') return 0;
   return Math.max(0, Math.min(130, Math.floor((Date.now() - new Date(currentMatch.started_at).getTime()) / 60000)));
@@ -140,8 +161,9 @@ function renderManagerView() {
   pitch.querySelectorAll('.formation-player').forEach(player => player.remove());
   benchPanel.querySelectorAll('.bench-player').forEach(player => player.remove());
   const matchdayPlayers = activeLineupIds.size ? roster.filter(player => activeLineupIds.has(player.id)) : roster;
+  const { starters, bench } = arrangeMatchdaySquad(matchdayPlayers);
   const minutes = getMatchMinutes();
-  matchdayPlayers.slice(0, formationSlots.length).forEach((player, index) => {
+  starters.forEach((player, index) => {
     const [x, y] = formationSlots[index];
     const button = document.createElement('button');
     button.type = 'button'; button.className = `formation-player${index === 0 ? ' active' : ''}`;
@@ -153,8 +175,7 @@ function renderManagerView() {
     button.addEventListener('click', () => { pitch.querySelectorAll('.formation-player').forEach(item => item.classList.remove('active')); button.classList.add('active'); selectManagerPlayer(player, minutes); });
     pitch.append(button);
   });
-  const lineupIds = new Set(matchdayPlayers.map(player => player.id));
-  roster.filter(player => !lineupIds.has(player.id)).forEach(player => {
+  bench.forEach(player => {
     const row = document.createElement('div'); row.className = 'bench-player';
     const avatar = document.createElement('span'); avatar.className = 'avatar'; avatar.textContent = playerInitials(player.name);
     const details = document.createElement('div');
@@ -165,7 +186,8 @@ function renderManagerView() {
     row.append(avatar, details, action);
     benchPanel.insertBefore(row, benchPanel.querySelector('.minutes-note'));
   });
-  if (matchdayPlayers.length) selectManagerPlayer(matchdayPlayers[0], minutes);
+  benchPanel.querySelector('.status').textContent = bench.length ? `${bench.length} on bench` : 'No substitutes';
+  if (starters.length) selectManagerPlayer(starters[0], minutes);
   else {
     document.getElementById('selectedPlayer').querySelector('.eyebrow').textContent = 'No players selected';
     document.getElementById('selectedPlayer').querySelector('h2').textContent = 'Set up your roster';
