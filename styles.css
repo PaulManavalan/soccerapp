@@ -386,6 +386,7 @@ h2{font-size:17px;letter-spacing:-.55px;margin-bottom:0}
 .duel-box-left{left:-1px}
 .duel-box-right{right:-1px}
 .duel-marker{position:absolute;left:var(--x);top:var(--y);transform:translate(-50%,-50%);width:31px;height:31px;border-radius:50%;display:grid;place-items:center;color:#fff;font:700 10px Manrope;cursor:pointer;box-shadow:0 2px 5px rgba(0,0,0,.24)}
+.duel-marker[hidden]{display:none!important}
 .duel-marker.won{background:#3ca46d;border:2px solid #d4f5bb}
 .duel-marker.lost{background:#dc644b;border:2px solid #ffd0c4}
 .duel-marker.aerial:after{content:"";position:absolute;width:39px;height:39px;border-radius:50%;border:1px dashed rgba(255,255,255,.8)}
