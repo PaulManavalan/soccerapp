@@ -56,6 +56,7 @@ async function loadTeamData() {
   }
   renderMatchSetup();
   renderTeamSettings();
+  renderDuelPlayerOptions();
   updateMatchContext();
   await loadMatchDuels();
 }
@@ -91,16 +92,39 @@ function renderTeamSettings() {
     status.classList.remove('is-error'); status.textContent = `${player.name} was removed.`; await loadTeamData();
   }));
 }
+function renderDuelPlayerOptions() {
+  const filterOptions = roster.map(player => `<option value="${player.name}">#${player.shirt_number} ${player.name}</option>`).join('');
+  const logOptions = roster.map(player => `<option value="${player.id}">#${player.shirt_number} ${player.name}</option>`).join('');
+  const logSelect = document.getElementById('duelLogPlayer');
+  const filterSelect = document.getElementById('duelPlayer');
+  logSelect.innerHTML = `<option value="">Select player</option>${logOptions}`;
+  filterSelect.innerHTML = `<option value="all">All players</option>${filterOptions}`;
+}
+function timeLabel(totalSeconds) {
+  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
+}
+function attachDuelMarker(marker) { marker.addEventListener('click', () => renderDetail(marker)); }
+function createMarkerFromDuel(duel, player = null) {
+  const marker = document.createElement('button');
+  marker.type = 'button';
+  marker.className = `duel-marker ${duel.outcome} ${duel.duel_type}`;
+  marker.style.setProperty('--x', `${duel.pitch_x}%`); marker.style.setProperty('--y', `${duel.pitch_y}%`);
+  marker.dataset.duelId = duel.id; marker.dataset.player = player?.name || 'Unassigned player'; marker.dataset.number = player?.shirt_number || '–'; marker.dataset.time = timeLabel(duel.occurred_at_seconds); marker.dataset.zone = duel.zone || 'Field location'; marker.dataset.confidence = duel.confidence ?? 100; marker.dataset.outcome = duel.outcome; marker.dataset.initialOutcome = duel.suggested_outcome || duel.outcome; marker.dataset.type = duel.duel_type; marker.dataset.confirmed = duel.review_status === 'suggested' ? '' : 'true';
+  marker.innerHTML = `<span>${marker.dataset.number}</span>`;
+  document.querySelector('.duel-pitch').append(marker); markers.push(marker); attachDuelMarker(marker);
+  return marker;
+}
 async function loadMatchDuels() {
   if (!currentMatch) return;
-  const { data: savedDuels, error } = await supabase.from('duels').select('id,player_id,occurred_at_seconds,duel_type,outcome,suggested_outcome,confidence,review_status').eq('match_id', currentMatch.id);
+  const { data: savedDuels, error } = await supabase.from('duels').select('id,player_id,occurred_at_seconds,pitch_x,pitch_y,duel_type,outcome,suggested_outcome,confidence,review_status').eq('match_id', currentMatch.id);
   if (error) return;
   savedDuels.forEach(duel => {
     const marker = markers.find(item => {
       const [minutes, seconds] = item.dataset.time.split(':').map(Number);
       return minutes * 60 + seconds === duel.occurred_at_seconds;
     });
-    if (!marker) return;
+    const player = roster.find(item => item.id === duel.player_id);
+    if (!marker) { createMarkerFromDuel(duel, player); return; }
     marker.dataset.duelId = duel.id;
     marker.dataset.outcome = duel.outcome;
     marker.dataset.type = duel.duel_type;
@@ -111,7 +135,6 @@ async function loadMatchDuels() {
     marker.classList.toggle('lost', duel.outcome === 'lost');
     marker.classList.toggle('ground', duel.duel_type === 'ground');
     marker.classList.toggle('aerial', duel.duel_type === 'aerial');
-    const player = roster.find(item => item.id === duel.player_id);
     if (player) { marker.dataset.player = player.name; marker.dataset.number = player.shirt_number; }
   });
   updateTotal();
@@ -199,6 +222,23 @@ document.getElementById('matchForm').addEventListener('submit', async event => {
   currentMatch = match; message.textContent = `${opponent} is ready for matchday.`; await loadTeamData();
 });
 
+document.getElementById('duelLogForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const status = document.getElementById('duelLogStatus');
+  const playerId = document.getElementById('duelLogPlayer').value;
+  const minute = Number(document.getElementById('duelLogMinute').value);
+  if (!currentMatch || !playerId || Number.isNaN(minute)) { status.textContent = 'Create an active match and choose a player before logging a duel.'; status.classList.add('is-error'); return; }
+  const zoneMap = { central: { x: 50, y: 50, label: 'Central third' }, 'left-attacking': { x: 24, y: 27, label: 'Left attacking third' }, 'right-defensive': { x: 72, y: 72, label: 'Right defensive third' }, 'left-defensive': { x: 27, y: 74, label: 'Left defensive third' }, 'right-attacking': { x: 76, y: 26, label: 'Right attacking third' } };
+  const zone = zoneMap[document.getElementById('duelLogZone').value];
+  const payload = { match_id: currentMatch.id, player_id: playerId, occurred_at_seconds: minute * 60, pitch_x: zone.x, pitch_y: zone.y, duel_type: document.getElementById('duelLogType').value, outcome: document.getElementById('duelLogOutcome').value, suggested_outcome: document.getElementById('duelLogOutcome').value, confidence: 100, review_status: 'confirmed' };
+  status.classList.remove('is-error'); status.textContent = 'Saving duel…';
+  const { data: duel, error } = await supabase.from('duels').insert(payload).select().single();
+  if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
+  const player = roster.find(item => item.id === playerId);
+  const marker = createMarkerFromDuel({ ...duel, zone: zone.label }, player);
+  marker.dataset.zone = zone.label; status.textContent = `Duel added at ${timeLabel(payload.occurred_at_seconds)}.`; event.target.reset(); renderDetail(marker); filterMarkers();
+});
+
 markers.forEach(marker => { marker.dataset.initialOutcome = marker.dataset.outcome; });
 function applyStored(marker) { const saved = stored[marker.dataset.time]; if (!saved) return; marker.dataset.outcome = saved.outcome; marker.dataset.type = saved.type; marker.dataset.confirmed = saved.confirmed ? 'true' : ''; marker.classList.toggle('won', saved.outcome === 'won'); marker.classList.toggle('lost', saved.outcome === 'lost'); marker.classList.toggle('ground', saved.type === 'ground'); marker.classList.toggle('aerial', saved.type === 'aerial'); }
 async function save(marker, reviewStatus = 'confirmed') {
@@ -219,7 +259,7 @@ function renderDetail(marker) { if (!marker) return; selected = marker; markers.
 function filterMarkers() { const player = document.getElementById('duelPlayer').value, type = document.getElementById('duelType').value, outcome = document.getElementById('duelOutcome').value; markers.forEach(marker => { marker.hidden = !((player === 'all' || marker.dataset.player === player) && (type === 'all' || marker.dataset.type === type) && (outcome === 'all' || marker.dataset.outcome === outcome)); }); }
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => { document.querySelectorAll('.tab,.tab-view').forEach(element => element.classList.remove('active')); tab.classList.add('active'); document.getElementById(tab.dataset.tab).classList.add('active'); }));
 document.querySelectorAll('.formation-player').forEach(player => player.addEventListener('click', () => { document.querySelectorAll('.formation-player').forEach(item => item.classList.remove('active')); player.classList.add('active'); const data = player.dataset; const card = document.getElementById('selectedPlayer'); card.querySelector('.selected-number').textContent = data.number; card.querySelector('.eyebrow').textContent = data.position; card.querySelector('h2').innerHTML = `${data.name} <span>${data.rating}</span>`; card.querySelector('small').textContent = `${data.minutes} minutes played`; document.getElementById('statMinutes').textContent = `${data.minutes}'`; document.getElementById('statPasses').textContent = data.passes; document.getElementById('statShots').textContent = data.shots; document.getElementById('statTackles').textContent = data.tackles; }));
-markers.forEach(marker => { applyStored(marker); marker.addEventListener('click', () => renderDetail(marker)); }); filters.forEach(id => document.getElementById(id).addEventListener('change', filterMarkers));
+markers.forEach(marker => { applyStored(marker); attachDuelMarker(marker); }); filters.forEach(id => document.getElementById(id).addEventListener('change', filterMarkers));
 document.getElementById('confirmDuel').addEventListener('click', async () => { selected.dataset.confirmed = 'true'; await save(selected); renderDetail(selected); });
 document.getElementById('changeDuel').addEventListener('click', () => { const panel = document.getElementById('correctionPanel'); panel.hidden = !panel.hidden; });
 document.querySelectorAll('[data-correction]').forEach(button => button.addEventListener('click', async () => { selected.dataset.outcome = button.dataset.correction; selected.dataset.confirmed = 'true'; selected.classList.toggle('won', selected.dataset.outcome === 'won'); selected.classList.toggle('lost', selected.dataset.outcome === 'lost'); await save(selected, 'corrected'); updateTotal(); filterMarkers(); renderDetail(selected); }));
