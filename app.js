@@ -181,9 +181,10 @@ authForm.addEventListener('submit', async event => {
 authModeToggle.addEventListener('click', () => { authMode = authMode === 'sign-in' ? 'sign-up' : 'sign-in'; renderAuthMode(); });
 signOutButton.addEventListener('click', async () => {
   signOutButton.disabled = true;
-  const { error } = await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
   signOutButton.disabled = false;
   if (error) return setAuthStatus(error.message, true);
+  currentUser = null;
   currentTeam = null;
   currentMatch = null;
   roster = [];
