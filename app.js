@@ -27,6 +27,7 @@ let hasTeamMembership = false;
 let roster = [];
 let currentMatch = null;
 let activeLineupIds = new Set();
+let matchEvents = [];
 let authMode = 'sign-in';
 
 function setAuthStatus(message, isError = false) {
@@ -77,8 +78,9 @@ async function loadTeamData() {
   renderManagerView();
   renderTeamSettings();
   renderDuelPlayerOptions();
+  renderEventPlayerOptions();
   updateMatchContext();
-  await loadMatchDuels();
+  await Promise.all([loadMatchDuels(), loadMatchEvents()]);
 }
 function updateMatchContext() {
   const teamName = currentTeam?.name || 'Summit FC';
@@ -141,19 +143,30 @@ function playerInitials(name) {
   return name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
 }
 function selectManagerPlayer(player, minutes) {
+  const stats = getPlayerEventStats(player.id, minutes);
   const card = document.getElementById('selectedPlayer');
   card.querySelector('.selected-number').textContent = player.shirt_number;
   card.querySelector('.eyebrow').textContent = player.position || 'Player';
   card.querySelector('h2').innerHTML = '';
   card.querySelector('h2').append(document.createTextNode(`${player.name} `));
   const rating = document.createElement('span');
-  rating.textContent = minutes ? '6.5' : '—';
+  rating.textContent = minutes ? stats.rating : '—';
   card.querySelector('h2').append(rating);
   card.querySelector('small').textContent = `${minutes} minutes played`;
   document.getElementById('statMinutes').textContent = `${minutes}'`;
-  document.getElementById('statPasses').textContent = '0 / 0';
-  document.getElementById('statShots').textContent = '0';
-  document.getElementById('statTackles').textContent = '0';
+  document.getElementById('statPasses').textContent = `${stats.completedPasses} / ${stats.totalPasses}`;
+  document.getElementById('statShots').textContent = stats.shots;
+  document.getElementById('statTackles').textContent = stats.tacklesWon;
+}
+function getPlayerEventStats(playerId, minutes = getMatchMinutes()) {
+  const events = matchEvents.filter(event => event.player_id === playerId);
+  const count = type => events.filter(event => event.event_type === type).length;
+  const completedPasses = count('pass_complete');
+  const totalPasses = completedPasses + count('pass_incomplete');
+  const shots = count('shot_on_target') + count('shot_off_target') + count('goal');
+  const tacklesWon = count('tackle_won');
+  const ratingValue = Math.max(1, Math.min(10, 6 + count('goal') * 1.1 + count('shot_on_target') * .15 + completedPasses * .025 + tacklesWon * .12 + count('interception') * .1 + count('clearance') * .05 - count('pass_incomplete') * .025 - count('tackle_lost') * .12 - count('yellow_card') * .3 - count('red_card') * 1.5));
+  return { completedPasses, totalPasses, shots, tacklesWon, rating: minutes ? ratingValue.toFixed(1) : '—' };
 }
 function renderManagerView() {
   const pitch = document.querySelector('.formation-pitch');
@@ -170,7 +183,7 @@ function renderManagerView() {
     button.style.setProperty('--x', `${x}%`); button.style.setProperty('--y', `${y}%`);
     const number = document.createElement('span'); number.textContent = player.shirt_number;
     const name = document.createElement('b'); name.textContent = player.name;
-    const rating = document.createElement('small'); rating.textContent = minutes ? '6.5' : '—';
+    const rating = document.createElement('small'); rating.textContent = getPlayerEventStats(player.id, minutes).rating;
     button.append(number, name, rating);
     button.addEventListener('click', () => { pitch.querySelectorAll('.formation-player').forEach(item => item.classList.remove('active')); button.classList.add('active'); selectManagerPlayer(player, minutes); });
     pitch.append(button);
@@ -230,6 +243,57 @@ function renderDuelPlayerOptions() {
   const filterSelect = document.getElementById('duelPlayer');
   logSelect.innerHTML = `<option value="">Select player</option>${logOptions}`;
   filterSelect.innerHTML = `<option value="all">All players</option>${filterOptions}`;
+}
+const eventLabels = {
+  goal: 'Goal', shot_on_target: 'Shot on target', shot_off_target: 'Shot off target',
+  pass_complete: 'Completed pass', pass_incomplete: 'Incomplete pass', tackle_won: 'Tackle won', tackle_lost: 'Tackle lost',
+  interception: 'Interception', clearance: 'Clearance', possession_won: 'Possession won', possession_lost: 'Possession lost',
+  foul_committed: 'Foul committed', foul_won: 'Foul won', yellow_card: 'Yellow card', red_card: 'Red card'
+};
+function getEventPlayers() {
+  return activeLineupIds.size ? roster.filter(player => activeLineupIds.has(player.id)) : roster;
+}
+function renderEventPlayerOptions() {
+  const select = document.getElementById('eventLogPlayer');
+  select.innerHTML = `<option value="">Select player</option>${getEventPlayers().map(player => `<option value="${player.id}">#${player.shirt_number} ${escapeHtml(player.name)}</option>`).join('')}`;
+}
+function renderLiveStats() {
+  const count = type => matchEvents.filter(event => event.event_type === type).length;
+  const shotsOnTarget = count('shot_on_target') + count('goal');
+  const totalShots = shotsOnTarget + count('shot_off_target');
+  const completedPasses = count('pass_complete');
+  const totalPasses = completedPasses + count('pass_incomplete');
+  const wonPossession = count('possession_won');
+  const possessionEvents = wonPossession + count('possession_lost');
+  document.getElementById('livePossession').textContent = possessionEvents ? `${Math.round((wonPossession / possessionEvents) * 100)}%` : '—';
+  document.getElementById('livePossessionDetail').textContent = possessionEvents ? `${wonPossession} won / ${possessionEvents} possession events` : 'Log recoveries and turnovers';
+  document.getElementById('liveShots').innerHTML = `${shotsOnTarget}<span>/ ${totalShots}</span>`;
+  document.getElementById('liveGoals').textContent = count('goal');
+  document.getElementById('livePassAccuracy').innerHTML = totalPasses ? `${Math.round((completedPasses / totalPasses) * 100)}<span>%</span>` : '—';
+  document.getElementById('livePassDetail').textContent = totalPasses ? `${completedPasses} / ${totalPasses} completed` : 'Complete / attempted passes';
+}
+function renderEventTimeline() {
+  const timeline = document.getElementById('eventTimeline');
+  document.getElementById('eventCount').textContent = `${matchEvents.length} event${matchEvents.length === 1 ? '' : 's'}`;
+  if (!matchEvents.length) { timeline.innerHTML = '<p class="empty-lineup">No events logged yet.</p>'; return; }
+  timeline.innerHTML = '';
+  [...matchEvents].sort((a, b) => b.occurred_at_seconds - a.occurred_at_seconds).forEach(event => {
+    const row = document.createElement('div'); row.className = 'event-row';
+    const time = document.createElement('b'); time.textContent = timeLabel(event.occurred_at_seconds);
+    const details = document.createElement('div');
+    const player = roster.find(item => item.id === event.player_id);
+    const label = document.createElement('strong'); label.textContent = eventLabels[event.event_type] || event.event_type;
+    const meta = document.createElement('small'); meta.textContent = `${player ? `#${player.shirt_number} ${player.name}` : 'Team event'}${event.notes ? ` · ${event.notes}` : ''}`;
+    details.append(label, meta); row.append(time, details); timeline.append(row);
+  });
+}
+async function loadMatchEvents() {
+  matchEvents = [];
+  if (!currentMatch) { renderLiveStats(); renderEventTimeline(); renderManagerView(); return; }
+  const { data, error } = await supabase.from('match_events').select('id,player_id,event_type,occurred_at_seconds,pitch_x,pitch_y,notes,created_at').eq('match_id', currentMatch.id);
+  if (error) { document.getElementById('eventLogStatus').textContent = 'Event tracking needs the new Supabase migration before it can save data.'; document.getElementById('eventLogStatus').classList.add('is-error'); renderLiveStats(); renderEventTimeline(); return; }
+  matchEvents = data ?? [];
+  renderLiveStats(); renderEventTimeline(); renderManagerView();
 }
 function timeLabel(totalSeconds) {
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
@@ -402,6 +466,22 @@ document.getElementById('duelLogForm').addEventListener('submit', async event =>
   const player = roster.find(item => item.id === playerId);
   const marker = createMarkerFromDuel({ ...duel, zone: zone.label }, player);
   marker.dataset.zone = zone.label; status.textContent = `Duel added at ${timeLabel(payload.occurred_at_seconds)}.`; event.target.reset(); updateTotal(); renderDetail(marker); filterMarkers();
+});
+
+document.getElementById('eventLogForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const status = document.getElementById('eventLogStatus');
+  const playerId = document.getElementById('eventLogPlayer').value;
+  const minute = Number(document.getElementById('eventLogMinute').value);
+  if (!currentMatch || !playerId || Number.isNaN(minute)) { status.textContent = 'Create an active match and choose a player before logging an event.'; status.classList.add('is-error'); return; }
+  const zoneMap = { central: { x: 50, y: 50 }, 'left-attacking': { x: 24, y: 27 }, 'right-attacking': { x: 76, y: 27 }, 'left-defensive': { x: 24, y: 74 }, 'right-defensive': { x: 76, y: 74 } };
+  const zone = zoneMap[document.getElementById('eventLogZone').value];
+  const payload = { match_id: currentMatch.id, player_id: playerId, event_type: document.getElementById('eventLogType').value, occurred_at_seconds: minute * 60, pitch_x: zone.x, pitch_y: zone.y, notes: document.getElementById('eventLogNotes').value.trim() || null };
+  status.classList.remove('is-error'); status.textContent = 'Saving event…';
+  const { data, error } = await supabase.from('match_events').insert(payload).select().single();
+  if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
+  matchEvents.push(data); event.target.reset(); status.textContent = `${eventLabels[data.event_type]} logged at ${timeLabel(data.occurred_at_seconds)}.`;
+  renderLiveStats(); renderEventTimeline(); renderManagerView();
 });
 
 markers.forEach(marker => { marker.dataset.initialOutcome = marker.dataset.outcome; });

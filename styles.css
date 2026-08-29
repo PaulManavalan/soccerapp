@@ -155,6 +155,8 @@ h2{font-size:17px;letter-spacing:-.55px;margin-bottom:0}
 
 .up{color:#14956b!important}
 
+.live-event-panel{margin:0 0 20px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:15px 17px;display:grid;grid-template-columns:170px 1fr;gap:5px 18px;align-items:center}.live-event-panel h2{font-size:15px}.live-event-panel .eyebrow{margin-bottom:4px}.live-event-panel>div>p:last-child{font-size:10px;color:#79867e;line-height:1.5;margin:4px 0 0}.live-event-panel form{display:grid;grid-template-columns:1.25fr 1.2fr .55fr 1.15fr 1.25fr auto;gap:7px}.live-event-panel select,.live-event-panel input{min-width:0;height:34px;border:1px solid #dce4de;border-radius:6px;padding:0 8px;background:#fff;font:10px Manrope;color:#263e31}.live-event-panel button{border:0;border-radius:6px;background:#357d51;color:#fff;padding:0 11px;font:800 10px Manrope;cursor:pointer;white-space:nowrap}.live-event-panel .auth-status{grid-column:2;margin:0}.event-timeline-panel{margin:0 0 20px}.event-timeline{display:grid}.event-row{display:grid;grid-template-columns:50px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line)}.event-row b{font:500 10px "DM Mono";color:#397d50}.event-row strong,.event-row small{display:block}.event-row strong{font-size:11px}.event-row small{font-size:9px;color:#7c8981;margin-top:2px}
+
 .content-grid,.analysis-grid,.manager-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:21px}
@@ -486,6 +488,7 @@ main{padding:22px 16px}
 
 .duel-hero{padding:20px;display:block}
 .duel-log-panel{display:block}.duel-log-panel form{grid-template-columns:1fr 1fr;margin-top:12px}.duel-log-panel form select:first-child{grid-column:1/3}.duel-log-panel form select:last-of-type{grid-column:1/3}.duel-log-panel form button{grid-column:1/3;height:34px}.duel-log-panel .auth-status{margin-top:8px}
+.live-event-panel{display:block}.live-event-panel form{grid-template-columns:1fr 1fr;margin-top:12px}.live-event-panel form select:first-child,.live-event-panel form input:nth-of-type(2){grid-column:1/3}.live-event-panel form button{grid-column:1/3;height:34px}.live-event-panel .auth-status{margin-top:8px}
 .duel-total{margin-top:16px;width:max-content}
 .duel-filter-bar{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .duel-filter-bar select{width:100%}
