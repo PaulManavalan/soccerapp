@@ -11,6 +11,11 @@ let selected = markers[0] || null;
 const authGate = document.getElementById('authGate');
 const authForm = document.getElementById('authForm');
 const authEmail = document.getElementById('authEmail');
+const authPassword = document.getElementById('authPassword');
+const authTitle = document.getElementById('authTitle');
+const authIntro = document.getElementById('authIntro');
+const authSubmit = document.getElementById('authSubmit');
+const authModeToggle = document.getElementById('authModeToggle');
 const authStatus = document.getElementById('authStatus');
 const teamOnboarding = document.getElementById('teamOnboarding');
 const teamForm = document.getElementById('teamForm');
@@ -21,6 +26,7 @@ let hasTeamMembership = false;
 let roster = [];
 let currentMatch = null;
 let activeLineupIds = new Set();
+let authMode = 'sign-in';
 
 function setAuthStatus(message, isError = false) {
   authStatus.textContent = message;
@@ -30,6 +36,15 @@ function setSession(session) {
   currentUser = session?.user ?? null;
   authGate.hidden = Boolean(session);
   document.body.classList.toggle('is-authenticated', Boolean(session));
+}
+function renderAuthMode() {
+  const isSignUp = authMode === 'sign-up';
+  authTitle.textContent = isSignUp ? 'Create coach account' : 'Sign in to your team';
+  authIntro.textContent = isSignUp ? 'Create a password-protected coach account for your team.' : 'Use your coach email and password to access your team.';
+  authPassword.autocomplete = isSignUp ? 'new-password' : 'current-password';
+  authSubmit.innerHTML = `${isSignUp ? 'Create account' : 'Sign in'} <span>→</span>`;
+  authModeToggle.textContent = isSignUp ? 'Already have an account? Sign in' : 'New coach? Create an account';
+  setAuthStatus('Your match data stays private to your coaching staff.');
 }
 async function loadTeamWorkspace() {
   if (!currentUser) return;
@@ -150,13 +165,21 @@ async function initialiseAuth() {
 authForm.addEventListener('submit', async event => {
   event.preventDefault();
   const email = authEmail.value.trim();
-  if (!email) return;
-  setAuthStatus('Sending your secure sign-in link…');
-  const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+  const password = authPassword.value;
+  if (!email || !password) return;
+  if (password.length < 8) return setAuthStatus('Use a password with at least 8 characters.', true);
+  const isSignUp = authMode === 'sign-up';
+  setAuthStatus(isSignUp ? 'Creating your coach account…' : 'Signing you in…');
+  const { data, error } = isSignUp
+    ? await supabase.auth.signUp({ email, password })
+    : await supabase.auth.signInWithPassword({ email, password });
   if (error) return setAuthStatus(error.message, true);
-  setAuthStatus(`Check ${email} for your sign-in link.`);
+  if (isSignUp && !data.session) return setAuthStatus('Account created. Confirm the email if email confirmation is enabled in Supabase.');
+  setAuthStatus(isSignUp ? 'Account created. Opening your team workspace…' : 'Signed in. Opening your team workspace…');
 });
+authModeToggle.addEventListener('click', () => { authMode = authMode === 'sign-in' ? 'sign-up' : 'sign-in'; renderAuthMode(); });
 supabase.auth.onAuthStateChange((_event, session) => { setSession(session); if (session) loadTeamWorkspace(); });
+renderAuthMode();
 initialiseAuth();
 
 teamForm.addEventListener('submit', async event => {
