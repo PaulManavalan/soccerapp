@@ -81,10 +81,10 @@
 <strong data-team-name>Summit FC</strong>
 </div>
 <div class="score">
-<b>1</b>
+<b id="teamScore">0</b>
 <em>—</em>
-<b>0</b>
-<small>67:24 · 2nd half</small>
+<b id="opponentScore">0</b>
+<small><span id="liveMatchClock">00:00</span> · <span id="liveMatchState">Not started</span></small>
 </div>
 <div class="team away">
 <div class="team-crest harbor">H</div>
@@ -94,6 +94,7 @@
 <button class="match-button">Open match center <span>→</span>
 </button>
 </section>
+<section class="match-operations"><div><p class="eyebrow">Match operations</p><h2 id="operationsTitle">No active match</h2><p id="operationsDetail">Create a match and choose your matchday squad to begin.</p></div><div class="clock-control"><strong id="operationsClock">00:00</strong><span id="operationsStatus" class="status watch">Not started</span></div><div class="operation-actions"><button id="startMatchButton" type="button">Start match</button><button id="pauseMatchButton" type="button">Pause</button><button id="finishMatchButton" type="button">Finish match</button></div><form id="scoreForm" class="score-control"><label>Us<input id="teamScoreInput" type="number" min="0" max="99" value="0"></label><label>Opp.<input id="opponentScoreInput" type="number" min="0" max="99" value="0"></label><button type="submit">Save score</button></form></section>
 <section class="stats-grid">
 <article>
 <div class="stat-icon lime">◔</div>
@@ -299,7 +300,7 @@
 <div>
 <p class="eyebrow">Matchday squad</p>
 <h2 data-active-match-title>Summit FC vs. Harbor City</h2>
-<p>Live · 67:24 · 1–0</p>
+<p>Live · <span id="managerMatchClock">00:00</span> · <span id="managerScore">0–0</span></p>
 </div>
 <button class="match-button">Make a substitution <span>+</span>
 </button>

@@ -29,6 +29,9 @@ let currentMatch = null;
 let activeLineupIds = new Set();
 let matchEvents = [];
 let matchDuels = [];
+let matchAppearances = [];
+let selectedManagerPlayerId = null;
+let matchClockInterval = null;
 let authMode = 'sign-in';
 
 function setAuthStatus(message, isError = false) {
@@ -68,14 +71,23 @@ async function loadTeamData() {
   const { data: players, error: playersError } = await supabase.from('players').select('id,name,shirt_number,position').eq('team_id', currentTeam.id).order('shirt_number');
   if (playersError) return;
   roster = players ?? [];
-  const { data: match } = await supabase.from('matches').select('id,opponent_name,started_at,status').eq('team_id', currentTeam.id).in('status', ['live', 'scheduled']).order('started_at', { ascending: false }).limit(1).maybeSingle();
+  let { data: match, error: matchError } = await supabase.from('matches').select('id,opponent_name,started_at,status,clock_elapsed_seconds,clock_running,clock_started_at,ended_at,team_score,opponent_score').eq('team_id', currentTeam.id).in('status', ['live', 'scheduled']).order('started_at', { ascending: false }).limit(1).maybeSingle();
+  if (matchError) {
+    const { data: legacyMatch } = await supabase.from('matches').select('id,opponent_name,started_at,status').eq('team_id', currentTeam.id).in('status', ['live', 'scheduled']).order('started_at', { ascending: false }).limit(1).maybeSingle();
+    match = legacyMatch ? { ...legacyMatch, clock_elapsed_seconds: 0, clock_running: false, clock_started_at: null, ended_at: null, team_score: 0, opponent_score: 0 } : null;
+  }
   currentMatch = match ?? null;
   activeLineupIds = new Set();
+  matchAppearances = [];
   if (currentMatch) {
     const { data: lineup } = await supabase.from('match_lineups').select('player_id').eq('match_id', currentMatch.id);
     activeLineupIds = new Set((lineup ?? []).map(row => row.player_id));
+    const { data: appearances, error: appearancesError } = await supabase.from('match_player_appearances').select('player_id,is_starter,entered_at_seconds,exited_at_seconds').eq('match_id', currentMatch.id);
+    matchAppearances = appearancesError ? [] : (appearances ?? []);
+    if (!appearancesError && !matchAppearances.length && activeLineupIds.size) await seedMatchAppearances();
   }
   renderMatchSetup();
+  renderMatchOperations();
   renderManagerView();
   renderTeamSettings();
   renderDuelPlayerOptions();
@@ -89,6 +101,11 @@ function updateMatchContext() {
   document.querySelectorAll('[data-team-name]').forEach(node => { node.textContent = teamName; });
   document.querySelectorAll('[data-opponent-name]').forEach(node => { node.textContent = opponentName; });
   document.querySelectorAll('[data-active-match-title]').forEach(node => { node.textContent = `${teamName} vs. ${opponentName}`; });
+  const teamScore = currentMatch?.team_score ?? 0;
+  const opponentScore = currentMatch?.opponent_score ?? 0;
+  document.getElementById('teamScore').textContent = teamScore;
+  document.getElementById('opponentScore').textContent = opponentScore;
+  document.getElementById('managerScore').textContent = `${teamScore}–${opponentScore}`;
 }
 function renderMatchSetup() {
   const picker = document.getElementById('lineupPicker');
@@ -136,14 +153,90 @@ function arrangeMatchdaySquad(players) {
   }).filter(Boolean);
   return { starters, bench: remaining };
 }
+async function seedMatchAppearances() {
+  if (!currentMatch) return;
+  const squad = roster.filter(player => activeLineupIds.has(player.id));
+  const starterIds = new Set(arrangeMatchdaySquad(squad).starters.map(player => player.id));
+  const rows = squad.map(player => ({ match_id: currentMatch.id, player_id: player.id, is_starter: starterIds.has(player.id), entered_at_seconds: starterIds.has(player.id) ? 0 : null }));
+  const { data, error } = await supabase.from('match_player_appearances').upsert(rows, { onConflict: 'match_id,player_id' }).select('player_id,is_starter,entered_at_seconds,exited_at_seconds');
+  if (!error) matchAppearances = data ?? [];
+}
+function getMatchClockSeconds() {
+  if (!currentMatch) return 0;
+  const elapsed = currentMatch.clock_elapsed_seconds || 0;
+  if (!currentMatch.clock_running || !currentMatch.clock_started_at) return elapsed;
+  return Math.min(7800, elapsed + Math.max(0, Math.floor((Date.now() - new Date(currentMatch.clock_started_at).getTime()) / 1000)));
+}
+function formatClock(seconds) {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+function updateMatchClock() {
+  const clock = formatClock(getMatchClockSeconds());
+  document.getElementById('liveMatchClock').textContent = clock;
+  document.getElementById('operationsClock').textContent = clock;
+  const managerClock = document.getElementById('managerMatchClock');
+  if (managerClock) managerClock.textContent = clock;
+}
+function renderMatchOperations() {
+  clearInterval(matchClockInterval);
+  const title = document.getElementById('operationsTitle');
+  const detail = document.getElementById('operationsDetail');
+  const status = document.getElementById('operationsStatus');
+  const start = document.getElementById('startMatchButton');
+  const pause = document.getElementById('pauseMatchButton');
+  const finish = document.getElementById('finishMatchButton');
+  const scoreForm = document.getElementById('scoreForm');
+  const liveState = document.getElementById('liveMatchState');
+  if (!currentMatch) {
+    title.textContent = 'No active match'; detail.textContent = 'Create a match and choose your matchday squad to begin.';
+    status.textContent = 'Not started'; status.className = 'status watch'; liveState.textContent = 'Not started'; start.disabled = true; pause.disabled = true; finish.disabled = true; scoreForm.querySelectorAll('input,button').forEach(node => { node.disabled = true; }); updateMatchClock(); return;
+  }
+  title.textContent = `${currentTeam.name} vs. ${currentMatch.opponent_name}`;
+  const running = currentMatch.clock_running;
+  detail.textContent = running ? 'Clock is running. Events and substitutions use the live match time.' : 'Clock is paused. Resume when play restarts.';
+  status.textContent = running ? 'Live' : currentMatch.status === 'scheduled' ? 'Ready' : 'Paused'; status.className = `status ${running ? 'good' : 'watch'}`;
+  liveState.textContent = running ? 'Live' : currentMatch.status === 'scheduled' ? 'Ready' : 'Paused';
+  start.textContent = running ? 'Running' : currentMatch.status === 'scheduled' ? 'Start match' : 'Resume';
+  start.disabled = running; pause.disabled = !running; finish.disabled = false;
+  scoreForm.querySelectorAll('input,button').forEach(node => { node.disabled = false; });
+  document.getElementById('teamScoreInput').value = currentMatch.team_score ?? 0;
+  document.getElementById('opponentScoreInput').value = currentMatch.opponent_score ?? 0;
+  updateMatchClock();
+  matchClockInterval = setInterval(updateMatchClock, 1000);
+}
+async function updateMatchClockState(update, message) {
+  if (!currentMatch) return;
+  const { data, error } = await supabase.from('matches').update(update).eq('id', currentMatch.id).select('id,opponent_name,started_at,status,clock_elapsed_seconds,clock_running,clock_started_at,ended_at,team_score,opponent_score').single();
+  if (error) { document.getElementById('operationsDetail').textContent = error.message; return; }
+  currentMatch = data; updateMatchContext(); document.getElementById('operationsDetail').textContent = message; renderMatchOperations(); renderManagerView();
+}
+async function makeSubstitution(inPlayer) {
+  if (!currentMatch || !currentMatch.clock_running) { document.getElementById('operationsDetail').textContent = 'Start or resume the match clock before making a substitution.'; return; }
+  const outPlayer = roster.find(player => player.id === selectedManagerPlayerId);
+  const activeIds = getStarterIds();
+  if (!outPlayer || !activeIds.has(outPlayer.id)) { document.getElementById('operationsDetail').textContent = 'Select a player on the pitch first, then choose a substitute.'; return; }
+  const clock = getMatchClockSeconds();
+  const { error: offError } = await supabase.from('match_player_appearances').update({ exited_at_seconds: clock, updated_at: new Date().toISOString() }).eq('match_id', currentMatch.id).eq('player_id', outPlayer.id);
+  if (offError) { document.getElementById('operationsDetail').textContent = offError.message; return; }
+  const { error: onError } = await supabase.from('match_player_appearances').update({ entered_at_seconds: clock, updated_at: new Date().toISOString() }).eq('match_id', currentMatch.id).eq('player_id', inPlayer.id);
+  if (onError) { document.getElementById('operationsDetail').textContent = onError.message; return; }
+  matchAppearances = matchAppearances.map(appearance => {
+    if (appearance.player_id === outPlayer.id) return { ...appearance, exited_at_seconds: clock };
+    if (appearance.player_id === inPlayer.id) return { ...appearance, entered_at_seconds: clock };
+    return appearance;
+  });
+  selectedManagerPlayerId = inPlayer.id;
+  await syncPlayerMatchStats(); renderManagerView();
+  document.getElementById('operationsDetail').textContent = `${inPlayer.name} replaced ${outPlayer.name} at ${formatClock(clock)}.`;
+}
 function getMatchMinutes() {
-  if (!currentMatch || currentMatch.status !== 'live') return 0;
-  return Math.max(0, Math.min(130, Math.floor((Date.now() - new Date(currentMatch.started_at).getTime()) / 60000)));
+  return Math.floor(getMatchClockSeconds() / 60);
 }
 function playerInitials(name) {
   return name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase();
 }
 function selectManagerPlayer(player, minutes) {
+  selectedManagerPlayerId = player.id;
   const stats = getPlayerEventStats(player.id, minutes);
   const card = document.getElementById('selectedPlayer');
   card.querySelector('.selected-number').textContent = player.shirt_number;
@@ -160,10 +253,20 @@ function selectManagerPlayer(player, minutes) {
   document.getElementById('statTackles').textContent = stats.tacklesWon;
 }
 function getStarterIds() {
+  if (matchAppearances.length) {
+    const now = getMatchClockSeconds();
+    return new Set(matchAppearances.filter(appearance => appearance.entered_at_seconds !== null && appearance.entered_at_seconds <= now && (appearance.exited_at_seconds === null || appearance.exited_at_seconds > now)).map(appearance => appearance.player_id));
+  }
   const matchdayPlayers = activeLineupIds.size ? roster.filter(player => activeLineupIds.has(player.id)) : roster;
   return new Set(arrangeMatchdaySquad(matchdayPlayers).starters.map(player => player.id));
 }
 function getPlayerMinutes(playerId) {
+  const appearance = matchAppearances.find(item => item.player_id === playerId);
+  if (appearance) {
+    if (appearance.entered_at_seconds === null) return 0;
+    const end = appearance.exited_at_seconds ?? getMatchClockSeconds();
+    return Math.max(0, Math.floor((end - appearance.entered_at_seconds) / 60));
+  }
   return getStarterIds().has(playerId) ? getMatchMinutes() : 0;
 }
 function getPlayerEventStats(playerId, minutes = getPlayerMinutes(playerId)) {
@@ -185,8 +288,13 @@ function renderManagerView() {
   pitch.querySelectorAll('.formation-player').forEach(player => player.remove());
   benchPanel.querySelectorAll('.bench-player').forEach(player => player.remove());
   const matchdayPlayers = activeLineupIds.size ? roster.filter(player => activeLineupIds.has(player.id)) : roster;
-  const { starters, bench } = arrangeMatchdaySquad(matchdayPlayers);
-  const minutes = getMatchMinutes();
+  const fallbackSquad = arrangeMatchdaySquad(matchdayPlayers);
+  const activeIds = getStarterIds();
+  const starters = matchAppearances.length ? arrangeMatchdaySquad(matchdayPlayers.filter(player => activeIds.has(player.id))).starters : fallbackSquad.starters;
+  const bench = matchAppearances.length ? matchdayPlayers.filter(player => {
+    const appearance = matchAppearances.find(item => item.player_id === player.id);
+    return appearance && appearance.entered_at_seconds === null;
+  }) : fallbackSquad.bench;
   starters.forEach((player, index) => {
     const [x, y] = formationSlots[index];
     const button = document.createElement('button');
@@ -194,9 +302,10 @@ function renderManagerView() {
     button.style.setProperty('--x', `${x}%`); button.style.setProperty('--y', `${y}%`);
     const number = document.createElement('span'); number.textContent = player.shirt_number;
     const name = document.createElement('b'); name.textContent = player.name;
-    const rating = document.createElement('small'); rating.textContent = getPlayerEventStats(player.id, minutes).rating;
+    const playerMinutes = getPlayerMinutes(player.id);
+    const rating = document.createElement('small'); rating.textContent = getPlayerEventStats(player.id, playerMinutes).rating;
     button.append(number, name, rating);
-    button.addEventListener('click', () => { pitch.querySelectorAll('.formation-player').forEach(item => item.classList.remove('active')); button.classList.add('active'); selectManagerPlayer(player, minutes); });
+    button.addEventListener('click', () => { pitch.querySelectorAll('.formation-player').forEach(item => item.classList.remove('active')); button.classList.add('active'); selectManagerPlayer(player, playerMinutes); });
     pitch.append(button);
   });
   bench.forEach(player => {
@@ -204,14 +313,17 @@ function renderManagerView() {
     const avatar = document.createElement('span'); avatar.className = 'avatar'; avatar.textContent = playerInitials(player.name);
     const details = document.createElement('div');
     const name = document.createElement('strong'); name.textContent = player.name;
-    const position = document.createElement('small'); position.textContent = `${player.position || 'Player'} · 0 min`;
+    const position = document.createElement('small'); position.textContent = `${player.position || 'Player'} · ${getPlayerMinutes(player.id)} min`;
     details.append(name, position);
-    const action = document.createElement('button'); action.type = 'button'; action.textContent = 'Bring on';
+    const action = document.createElement('button'); action.type = 'button'; action.textContent = 'Bring on'; action.addEventListener('click', () => makeSubstitution(player));
     row.append(avatar, details, action);
     benchPanel.insertBefore(row, benchPanel.querySelector('.minutes-note'));
   });
   benchPanel.querySelector('.status').textContent = bench.length ? `${bench.length} on bench` : 'No substitutes';
-  if (starters.length) selectManagerPlayer(starters[0], minutes);
+  if (starters.length) {
+    const selectedPlayer = starters.find(player => player.id === selectedManagerPlayerId) || starters[0];
+    selectManagerPlayer(selectedPlayer, getPlayerMinutes(selectedPlayer.id));
+  }
   else {
     document.getElementById('selectedPlayer').querySelector('.eyebrow').textContent = 'No players selected';
     document.getElementById('selectedPlayer').querySelector('h2').textContent = 'Set up your roster';
@@ -417,6 +529,33 @@ supabase.auth.onAuthStateChange((_event, session) => { setSession(session); if (
 renderAuthMode();
 initialiseAuth();
 
+document.getElementById('startMatchButton').addEventListener('click', async () => {
+  if (!currentMatch) return;
+  if (!matchAppearances.length) await seedMatchAppearances();
+  await updateMatchClockState({ status: 'live', clock_running: true, clock_started_at: new Date().toISOString() }, 'Match clock started.');
+});
+document.getElementById('pauseMatchButton').addEventListener('click', async () => {
+  if (!currentMatch || !currentMatch.clock_running) return;
+  const elapsed = getMatchClockSeconds();
+  await updateMatchClockState({ clock_elapsed_seconds: elapsed, clock_running: false, clock_started_at: null }, `Clock paused at ${formatClock(elapsed)}.`);
+  await syncPlayerMatchStats();
+});
+document.getElementById('finishMatchButton').addEventListener('click', async () => {
+  if (!currentMatch) return;
+  const elapsed = getMatchClockSeconds();
+  await updateMatchClockState({ status: 'final', clock_elapsed_seconds: elapsed, clock_running: false, clock_started_at: null, ended_at: new Date().toISOString() }, `Match finished at ${formatClock(elapsed)}.`);
+  await syncPlayerMatchStats();
+  await loadTeamData();
+});
+document.getElementById('scoreForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!currentMatch) return;
+  const teamScore = Number(document.getElementById('teamScoreInput').value);
+  const opponentScore = Number(document.getElementById('opponentScoreInput').value);
+  if (!Number.isInteger(teamScore) || !Number.isInteger(opponentScore) || teamScore < 0 || opponentScore < 0) return;
+  await updateMatchClockState({ team_score: teamScore, opponent_score: opponentScore }, `Score updated: ${teamScore}–${opponentScore}.`);
+});
+
 teamForm.addEventListener('submit', async event => {
   event.preventDefault();
   const name = document.getElementById('teamName').value.trim();
@@ -485,7 +624,13 @@ document.getElementById('matchForm').addEventListener('submit', async event => {
   }
   const { error: lineupError } = await supabase.from('match_lineups').insert(lineup);
   if (lineupError) { message.textContent = lineupError.message; message.classList.add('is-error'); return; }
-  currentMatch = match; message.textContent = isUpdate ? `${opponent} matchday changes saved.` : `${opponent} is ready for matchday.`; await loadTeamData();
+  currentMatch = match;
+  if (!match.clock_running && match.status === 'scheduled') {
+    await supabase.from('match_player_appearances').delete().eq('match_id', match.id);
+    matchAppearances = [];
+    await seedMatchAppearances();
+  }
+  message.textContent = isUpdate ? `${opponent} matchday changes saved.` : `${opponent} is ready for matchday.`; await loadTeamData();
 });
 
 document.getElementById('duelLogForm').addEventListener('submit', async event => {
@@ -518,7 +663,9 @@ document.getElementById('eventLogForm').addEventListener('submit', async event =
   status.classList.remove('is-error'); status.textContent = 'Saving event…';
   const { data, error } = await supabase.from('match_events').insert(payload).select().single();
   if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
-  matchEvents.push(data); event.target.reset(); status.textContent = `${eventLabels[data.event_type]} logged at ${timeLabel(data.occurred_at_seconds)}.`;
+  matchEvents.push(data);
+  if (data.event_type === 'goal') await updateMatchClockState({ team_score: (currentMatch.team_score ?? 0) + 1 }, `Goal added at ${timeLabel(data.occurred_at_seconds)}.`);
+  event.target.reset(); status.textContent = `${eventLabels[data.event_type]} logged at ${timeLabel(data.occurred_at_seconds)}.`;
   renderLiveStats(); renderEventTimeline(); await syncPlayerMatchStats(); renderManagerView();
 });
 

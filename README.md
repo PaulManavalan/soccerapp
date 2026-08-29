@@ -13,9 +13,10 @@ Open `index.html` in a browser to view the frontend prototype.
 3. Then run `supabase/migrations/20260830_match_lineups.sql` to store each matchday lineup.
 4. Then run `supabase/migrations/20260831_match_events.sql` to enable manual in-game event tracking and player stats.
 5. Then run `supabase/migrations/20260901_player_match_stats.sql` to store calculated player match stat lines and ratings.
-6. In **Project Settings → API Keys**, copy the Project URL and **Publishable key** (not the secret/service-role key).
-7. Copy `supabase.config.example.js` to `supabase.config.js`, add the two values. Only the publishable key belongs in browser code.
-8. In **Authentication → Providers → Email**, keep Email enabled. For password sign-up without needing a confirmation email during testing, turn off **Confirm email**. Turn it back on and configure a reliable custom SMTP sender before inviting a real coaching staff.
+6. Then run `supabase/migrations/20260902_match_operations.sql` to enable match clocks, substitutions, and exact player minutes.
+7. In **Project Settings → API Keys**, copy the Project URL and **Publishable key** (not the secret/service-role key).
+8. Copy `supabase.config.example.js` to `supabase.config.js`, add the two values. Only the publishable key belongs in browser code.
+9. In **Authentication → Providers → Email**, keep Email enabled. For password sign-up without needing a confirmation email during testing, turn off **Confirm email**. Turn it back on and configure a reliable custom SMTP sender before inviting a real coaching staff.
 
 ## Initial rating model
 
