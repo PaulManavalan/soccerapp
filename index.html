@@ -63,6 +63,7 @@
 </button>
 <button class="tab" data-tab="analysis">Post-game analysis</button>
 <button class="tab" data-tab="manager">Manager view</button>
+<button class="tab" data-tab="match">Match setup</button>
 <button class="tab" data-tab="duels">Duels <span class="live-dot">
 </span>
 </button>
@@ -441,6 +442,7 @@
 </article>
 </section>
 </section>
+<section class="tab-view" id="match"><section class="match-setup-hero"><div><p class="eyebrow">Matchday setup</p><h2>Create your active match</h2><p>Choose the opponent and active lineup before tracking duels and in-game events.</p></div><span id="matchState" class="status watch">No active match</span></section><section class="match-setup-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Match details</p><h2>Game information</h2></div></div><form id="matchForm" class="match-form"><label>Opponent<input id="matchOpponent" type="text" placeholder="Harbor City" required></label><label>Kickoff<input id="matchKickoff" type="datetime-local" required></label><label>Match status<select id="matchStatus"><option value="scheduled">Scheduled</option><option value="live">Live now</option></select></label><button type="submit">Create match <span>→</span></button><p id="matchFormStatus" class="auth-status" role="status"></p></form></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Matchday squad</p><h2>Select active lineup</h2></div><span id="lineupCount" class="status good">0 selected</span></div><div id="lineupPicker" class="lineup-picker"><p class="empty-lineup">Your roster will appear here after team setup.</p></div></article></section></section>
 <section class="tab-view" id="duels">
 <section class="duel-hero">
 <div>
