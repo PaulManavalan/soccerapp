@@ -56,6 +56,7 @@ async function loadTeamData() {
   }
   renderMatchSetup();
   updateMatchContext();
+  await loadMatchDuels();
 }
 function updateMatchContext() {
   const teamName = currentTeam?.name || 'Summit FC';
@@ -74,6 +75,33 @@ function renderMatchSetup() {
   state.textContent = currentMatch ? `${currentMatch.status} · vs ${currentMatch.opponent_name}` : 'No active match';
   state.className = `status ${currentMatch?.status === 'live' ? 'good' : 'watch'}`;
   document.querySelectorAll('#lineupPicker input').forEach(input => input.addEventListener('change', () => { input.checked ? activeLineupIds.add(input.value) : activeLineupIds.delete(input.value); count.textContent = `${activeLineupIds.size} selected`; }));
+}
+async function loadMatchDuels() {
+  if (!currentMatch) return;
+  const { data: savedDuels, error } = await supabase.from('duels').select('id,player_id,occurred_at_seconds,duel_type,outcome,suggested_outcome,confidence,review_status').eq('match_id', currentMatch.id);
+  if (error) return;
+  savedDuels.forEach(duel => {
+    const marker = markers.find(item => {
+      const [minutes, seconds] = item.dataset.time.split(':').map(Number);
+      return minutes * 60 + seconds === duel.occurred_at_seconds;
+    });
+    if (!marker) return;
+    marker.dataset.duelId = duel.id;
+    marker.dataset.outcome = duel.outcome;
+    marker.dataset.type = duel.duel_type;
+    marker.dataset.initialOutcome = duel.suggested_outcome || duel.outcome;
+    marker.dataset.confidence = duel.confidence ?? marker.dataset.confidence;
+    marker.dataset.confirmed = duel.review_status === 'suggested' ? '' : 'true';
+    marker.classList.toggle('won', duel.outcome === 'won');
+    marker.classList.toggle('lost', duel.outcome === 'lost');
+    marker.classList.toggle('ground', duel.duel_type === 'ground');
+    marker.classList.toggle('aerial', duel.duel_type === 'aerial');
+    const player = roster.find(item => item.id === duel.player_id);
+    if (player) { marker.dataset.player = player.name; marker.dataset.number = player.shirt_number; }
+  });
+  updateTotal();
+  filterMarkers();
+  renderDetail(selected);
 }
 async function initialiseAuth() {
   const { data, error } = await supabase.auth.getSession();
