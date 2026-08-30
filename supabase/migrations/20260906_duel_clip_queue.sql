@@ -19,6 +19,7 @@ create table if not exists public.duel_clip_jobs (
   suggested_outcome public.duel_outcome,
   confidence smallint check (confidence between 0 and 100),
   worker_note text,
+  duel_id uuid references public.duels(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

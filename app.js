@@ -875,7 +875,7 @@ document.getElementById('duelClipForm').addEventListener('submit', async event =
   const { error: uploadError } = await supabase.storage.from('duel-clips').upload(storagePath, file, { contentType: file.type, upsert: false });
   if (uploadError) { status.textContent = uploadError.message; status.classList.add('is-error'); return; }
   status.textContent = 'Adding clip to analysis queue…';
-  const { error: jobError } = await supabase.from('duel_clip_jobs').insert({
+  const { data: job, error: jobError } = await supabase.from('duel_clip_jobs').insert({
     team_id: currentTeam.id,
     match_id: matchId,
     uploaded_by: currentUser.id,
@@ -884,13 +884,14 @@ document.getElementById('duelClipForm').addEventListener('submit', async event =
     mime_type: file.type,
     coach_note: note,
     status: 'queued',
-  });
+  }).select('id').single();
   if (jobError) {
     await supabase.storage.from('duel-clips').remove([storagePath]);
     status.textContent = jobError.message; status.classList.add('is-error'); return;
   }
   event.target.reset();
-  status.textContent = 'Clip queued. The vision worker will add its suggested result here.';
+  const { error: startError } = await supabase.functions.invoke('start-duel-analysis', { body: { jobId: job.id } });
+  status.textContent = startError ? 'Clip queued. It will start automatically once the vision worker is deployed.' : 'Clip uploaded and analysis started.';
   await loadDuelClipWorkspace();
 });
 

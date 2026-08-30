@@ -22,6 +22,32 @@ Open `index.html` in a browser to view the frontend prototype.
 12. Copy `supabase.config.example.js` to `supabase.config.js`, add the two values. Only the publishable key belongs in browser code.
 13. In **Authentication → Providers → Email**, keep Email enabled. For password sign-up without needing a confirmation email during testing, turn off **Confirm email**. Turn it back on and configure a reliable custom SMTP sender before inviting a real coaching staff.
 
+## Duel clip automation handoff
+
+The clip uploader writes a private file and a `duel_clip_jobs` queue row. The included Edge Functions then hand a 15-minute signed clip URL to a separate vision worker and accept its result:
+
+- `supabase/functions/start-duel-analysis/index.ts` is invoked by the signed-in coach after upload. Deploy it with JWT verification enabled.
+- `supabase/functions/complete-duel-analysis/index.ts` is called only by the worker. Deploy it with JWT verification disabled and protect it with `DUEL_ANALYSIS_WORKER_SECRET`.
+
+Set these two Edge Function secrets before deploying: `DUEL_ANALYSIS_WORKER_URL` (the worker's HTTPS endpoint) and `DUEL_ANALYSIS_WORKER_SECRET` (a long random value shared only with the worker). The worker receives `jobId`, `teamId`, `matchId`, a temporary `clipUrl`, and a `callbackUrl`. It must POST this shape to the callback with the `X-Worker-Secret` header:
+
+```json
+{
+  "jobId": "uuid",
+  "status": "complete",
+  "playerId": "uuid or null",
+  "duelType": "ground",
+  "outcome": "won",
+  "confidence": 78,
+  "occurredAtSeconds": 14,
+  "pitchX": 50,
+  "pitchY": 50,
+  "note": "Optional short explanation"
+}
+```
+
+Use `{ "jobId": "uuid", "status": "failed", "note": "reason" }` if analysis cannot finish. The callback saves a suggested, coach-reviewable duel automatically.
+
 ## Initial rating model
 
 Players start at 6.0 when they play. The initial model adds value for goals (+1.25), shots on target (+0.15), completed passes (+0.02), tackles won (+0.18), interceptions (+0.14), clearances (+0.07), possession wins (+0.10), and duels won (+0.12). It deducts for incomplete passes (-0.025), tackles lost (-0.12), possession losses (-0.08), duels lost (-0.10), fouls committed (-0.08), yellow cards (-0.30), and red cards (-1.50). Ratings are capped from 1.0 to 10.0.
