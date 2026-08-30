@@ -733,7 +733,10 @@ document.getElementById('newTeamForm').addEventListener('submit', async event =>
   status.classList.remove('is-error'); status.textContent = 'Creating team workspace…';
   const { data: team, error: teamError } = await supabase.from('teams').insert({ name, created_by: currentUser.id }).select('id,name').single();
   if (teamError) { status.textContent = teamError.message; status.classList.add('is-error'); return; }
-  const { error: membershipError } = await supabase.from('team_members').insert({ team_id: team.id, user_id: currentUser.id, role: 'coach' });
+  const { error: membershipError } = await supabase.from('team_members').upsert(
+    { team_id: team.id, user_id: currentUser.id, role: 'coach' },
+    { onConflict: 'team_id,user_id' }
+  );
   if (membershipError) { status.textContent = membershipError.message; status.classList.add('is-error'); return; }
   localStorage.setItem(`touchline-active-team-${currentUser.id}`, team.id);
   input.value = ''; status.textContent = `${name} is ready for its roster.`; await loadTeamWorkspace();
@@ -765,11 +768,14 @@ teamForm.addEventListener('submit', async event => {
     team = createdTeam;
   }
   if (!hasTeamMembership) {
-    const { error: memberError } = await supabase.from('team_members').insert({ team_id: team.id, user_id: currentUser.id, role: 'coach' });
+    const { error: memberError } = await supabase.from('team_members').upsert(
+      { team_id: team.id, user_id: currentUser.id, role: 'coach' },
+      { onConflict: 'team_id,user_id' }
+    );
     if (memberError) { teamStatus.textContent = memberError.message; teamStatus.classList.add('is-error'); return; }
   }
   const players = roster.map(([shirtNumber, playerName, position = null]) => ({ team_id: team.id, shirt_number: Number(shirtNumber), name: playerName, position }));
-  const { error: playerError } = await supabase.from('players').insert(players);
+  const { error: playerError } = await supabase.from('players').upsert(players, { onConflict: 'team_id,shirt_number' });
   if (playerError) { teamStatus.textContent = playerError.message; teamStatus.classList.add('is-error'); return; }
   localStorage.setItem(`touchline-active-team-${currentUser.id}`, team.id);
   currentTeam = team; hasTeamMembership = true; teamOnboarding.hidden = true;
