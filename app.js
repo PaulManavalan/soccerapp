@@ -77,32 +77,13 @@ async function loadTeamWorkspace() {
   currentTeam = availableTeams.find(team => team.id === savedTeamId) ?? availableTeams[0] ?? null;
   renderTeamSwitcher();
   await loadCoachProfile();
-  if (currentTeam) {
-    const { data: membership } = await supabase.from('team_members').select('team_id').eq('team_id', currentTeam.id).maybeSingle();
-    hasTeamMembership = Boolean(membership);
-  }
-  teamOnboarding.hidden = Boolean(currentTeam && hasTeamMembership);
-  if (currentTeam && hasTeamMembership) await loadTeamData();
+  hasTeamMembership = Boolean(currentTeam);
+  teamOnboarding.hidden = Boolean(currentTeam);
+  if (currentTeam) await loadTeamData();
 }
 function renderTeamSwitcher() {
   teamSwitcher.innerHTML = availableTeams.length ? availableTeams.map(team => `<option value="${team.id}" ${team.id === currentTeam?.id ? 'selected' : ''}>${escapeHtml(team.name)}</option>`).join('') : '<option value="">No team yet</option>';
   teamSwitcher.disabled = availableTeams.length < 2;
-}
-async function ensureCurrentUserTeamMembership(teamId) {
-  const { data: existingMembership, error: lookupError } = await supabase
-    .from('team_members')
-    .select('team_id')
-    .eq('team_id', teamId)
-    .eq('user_id', currentUser.id)
-    .maybeSingle();
-  if (lookupError) return lookupError;
-  if (existingMembership) return null;
-
-  const { error: insertError } = await supabase
-    .from('team_members')
-    .insert({ team_id: teamId, user_id: currentUser.id, role: 'coach' });
-  // A previous request may have completed while this one was in progress.
-  return insertError?.code === '23505' ? null : insertError;
 }
 function defaultCoachName() {
   return (currentUser?.email || 'Coach').split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
@@ -749,10 +730,8 @@ document.getElementById('newTeamForm').addEventListener('submit', async event =>
   status.classList.remove('is-error'); status.textContent = 'Creating team workspace…';
   const { data: team, error: teamError } = await supabase.from('teams').insert({ name, created_by: currentUser.id }).select('id,name').single();
   if (teamError) { status.textContent = teamError.message; status.classList.add('is-error'); return; }
-  const membershipError = await ensureCurrentUserTeamMembership(team.id);
-  if (membershipError) { status.textContent = membershipError.message; status.classList.add('is-error'); return; }
   localStorage.setItem(`touchline-active-team-${currentUser.id}`, team.id);
-  input.value = ''; status.textContent = `${name} is ready for its roster.`; await loadTeamWorkspace();
+  input.value = ''; status.textContent = `${name} is ready. Add players in Settings & roster.`; await loadTeamWorkspace();
 });
 document.getElementById('inviteCoachForm').addEventListener('submit', async event => {
   event.preventDefault();
@@ -771,22 +750,10 @@ document.getElementById('inviteCoachForm').addEventListener('submit', async even
 teamForm.addEventListener('submit', async event => {
   event.preventDefault();
   const name = document.getElementById('teamName').value.trim();
-  const roster = document.getElementById('teamRoster').value.trim().split('\n').map(line => line.split(',').map(value => value.trim())).filter(parts => parts.length >= 2);
-  if (!name || !roster.length || !currentUser) return;
+  if (!name || !currentUser) return;
   teamStatus.textContent = 'Creating your team workspace…';
-  let team = currentTeam;
-  if (!team) {
-    const { data: createdTeam, error: teamError } = await supabase.from('teams').insert({ name, created_by: currentUser.id }).select().single();
-    if (teamError) { teamStatus.textContent = teamError.message; teamStatus.classList.add('is-error'); return; }
-    team = createdTeam;
-  }
-  if (!hasTeamMembership) {
-    const memberError = await ensureCurrentUserTeamMembership(team.id);
-    if (memberError) { teamStatus.textContent = memberError.message; teamStatus.classList.add('is-error'); return; }
-  }
-  const players = roster.map(([shirtNumber, playerName, position = null]) => ({ team_id: team.id, shirt_number: Number(shirtNumber), name: playerName, position }));
-  const { error: playerError } = await supabase.from('players').upsert(players, { onConflict: 'team_id,shirt_number' });
-  if (playerError) { teamStatus.textContent = playerError.message; teamStatus.classList.add('is-error'); return; }
+  const { data: team, error: teamError } = await supabase.from('teams').insert({ name, created_by: currentUser.id }).select('id,name').single();
+  if (teamError) { teamStatus.textContent = teamError.message; teamStatus.classList.add('is-error'); return; }
   localStorage.setItem(`touchline-active-team-${currentUser.id}`, team.id);
   currentTeam = team; hasTeamMembership = true; teamOnboarding.hidden = true;
   await loadTeamWorkspace();

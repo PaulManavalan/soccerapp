@@ -16,9 +16,10 @@ Open `index.html` in a browser to view the frontend prototype.
 6. Then run `supabase/migrations/20260902_match_operations.sql` to enable match clocks, substitutions, and exact player minutes.
 7. Then run `supabase/migrations/20260903_coach_profiles.sql` to enable editable coach display profiles.
 8. Then run `supabase/migrations/20260904_allow_creator_membership_retry.sql` to make interrupted team setup safe to retry.
-9. In **Project Settings → API Keys**, copy the Project URL and **Publishable key** (not the secret/service-role key).
-10. Copy `supabase.config.example.js` to `supabase.config.js`, add the two values. Only the publishable key belongs in browser code.
-11. In **Authentication → Providers → Email**, keep Email enabled. For password sign-up without needing a confirmation email during testing, turn off **Confirm email**. Turn it back on and configure a reliable custom SMTP sender before inviting a real coaching staff.
+9. Then run `supabase/migrations/20260905_team_creator_access.sql` so the coach who creates a team can use it immediately; adding a roster is handled later in Settings.
+10. In **Project Settings → API Keys**, copy the Project URL and **Publishable key** (not the secret/service-role key).
+11. Copy `supabase.config.example.js` to `supabase.config.js`, add the two values. Only the publishable key belongs in browser code.
+12. In **Authentication → Providers → Email**, keep Email enabled. For password sign-up without needing a confirmation email during testing, turn off **Confirm email**. Turn it back on and configure a reliable custom SMTP sender before inviting a real coaching staff.
 
 ## Initial rating model
 
