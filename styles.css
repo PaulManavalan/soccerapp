@@ -244,6 +244,7 @@ h2{font-size:17px;letter-spacing:-.55px;margin-bottom:0}
 .report-hero h2 span{color:#a5baaf}
 
 .report-hero p,.manager-head p{color:#b6c7bd;margin:7px 0 0;font-size:11px}
+.analysis-match-select{border:1px solid rgba(255,255,255,.25);border-radius:7px;background:#214735;color:#fff;padding:10px;font:700 10px Manrope;max-width:220px}
 
 .report-score{margin:20px 0;display:grid;grid-template-columns:170px 1fr 170px;background:#fff;border:1px solid var(--line);border-radius:11px}
 

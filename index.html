@@ -204,28 +204,27 @@
 <section class="tab-view" id="analysis">
 <div class="report-hero">
 <div>
-<p class="eyebrow">Full-time report · Aug 12, 2026</p>
-<h2>Summit FC <b>3</b> <span>—</span> <b>1</b> Riverside United</h2>
-<p>League match · Home · 90 minutes</p>
+<p id="analysisDate" class="eyebrow">Post-game report</p>
+<h2 id="analysisScore">Choose a completed match</h2>
+<p id="analysisMeta">Finalized match data will appear here.</p>
 </div>
-<button class="match-button">Export report <span>↓</span>
-</button>
+<select id="analysisMatchSelect" class="analysis-match-select"><option value="">No completed matches</option></select>
 </div>
 <section class="report-score">
 <article>
 <p>Overall performance</p>
-<strong>8.2</strong>
-<span>Excellent collective display</span>
+<strong id="analysisOverall">—</strong>
+<span id="analysisOverallLabel">No report yet</span>
 </article>
 <div class="score-explainer">
 <p class="eyebrow">Match summary</p>
-<h2>A controlled win built on high-quality chances</h2>
-<p>Summit generated 2.61 xG, restricted Riverside to 0.72, and completed 86% of passes. The team’s best spells came after winning the ball in the final third.</p>
+<h2 id="analysisHeadline">Finish a match to generate a report</h2>
+<p id="analysisSummary">The report uses your logged events, duels, player ratings, and final score.</p>
 </div>
 <div class="report-mini">
 <p>Key stat</p>
-<strong>11</strong>
-<span>High turnovers forced</span>
+<strong id="analysisKeyStat">—</strong>
+<span id="analysisKeyStatLabel">Log match events to build insights</span>
 </div>
 </section>
 <section class="analysis-grid">
@@ -235,29 +234,9 @@
 <p class="eyebrow">What worked</p>
 <h2>Team strengths</h2>
 </div>
-<span class="status good">3 positive trends</span>
+<span id="analysisStrengthCount" class="status good">0 trends</span>
 </div>
-<div class="finding">
-<span class="finding-icon">↗</span>
-<div>
-<strong>Counter-pressing</strong>
-<p>Won possession within 8 seconds on 11 occasions, creating 0.96 xG from those sequences.</p>
-</div>
-</div>
-<div class="finding">
-<span class="finding-icon">◒</span>
-<div>
-<strong>Left-side combinations</strong>
-<p>18 entries into the final third through Morgan, Ruiz, and Park.</p>
-</div>
-</div>
-<div class="finding">
-<span class="finding-icon">◎</span>
-<div>
-<strong>Set-piece efficiency</strong>
-<p>Generated 4 shots from corners; one resulted in a goal.</p>
-</div>
-</div>
+<div id="analysisStrengths"></div>
 </article>
 <article class="panel">
 <div class="panel-heading">
@@ -265,34 +244,18 @@
 <p class="eyebrow">Next focus</p>
 <h2>Areas to improve</h2>
 </div>
-<span class="status watch">2 focus areas</span>
+<span id="analysisFocusCount" class="status watch">0 focus areas</span>
 </div>
-<div class="finding warning">
-<span class="finding-icon">!</span>
-<div>
-<strong>Protecting the central channel</strong>
-<p>Riverside progressed through midfield 7 times after a broken press.</p>
-<a href="#clip">Watch 7 clips →</a>
-</div>
-</div>
-<div class="finding warning">
-<span class="finding-icon">!</span>
-<div>
-<strong>Defending transitions</strong>
-<p>Opponents created 0.42 xG in the first 10 seconds after our turnovers.</p>
-<a href="#clip">Watch 5 clips →</a>
-</div>
-</div>
+<div id="analysisFocus"></div>
 </article>
 </section>
 <section class="panel action-plan">
 <div>
 <p class="eyebrow">Next training session</p>
-<h2>Suggested focus: rest defense &amp; central compactness</h2>
-<p>Run a 7v7+3 transition exercise to rehearse coverage behind the press and protect the central lane.</p>
+<h2 id="analysisPlanTitle">Suggested focus: log more match data</h2>
+<p id="analysisPlanText">Complete a match with events and duels to generate a targeted training recommendation.</p>
 </div>
-<button class="plan-button">Build session <span>→</span>
-</button>
+<button class="plan-button" type="button">Build session <span>→</span></button>
 </section>
 </section>
 <section class="tab-view" id="manager">

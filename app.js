@@ -32,6 +32,8 @@ let matchDuels = [];
 let matchAppearances = [];
 let selectedManagerPlayerId = null;
 let matchClockInterval = null;
+let completedMatches = [];
+let selectedReportMatchId = null;
 let authMode = 'sign-in';
 
 function setAuthStatus(message, isError = false) {
@@ -96,7 +98,7 @@ async function loadTeamData() {
   renderDuelPlayerOptions();
   renderEventPlayerOptions();
   updateMatchContext();
-  await Promise.all([loadMatchDuels(), loadMatchEvents()]);
+  await Promise.all([loadMatchDuels(), loadMatchEvents(), loadPostGameMatches()]);
 }
 function updateMatchContext() {
   const teamName = currentTeam?.name || 'Summit FC';
@@ -429,6 +431,95 @@ async function loadMatchEvents() {
   matchEvents = data ?? [];
   renderLiveStats(); renderEventTimeline(); renderManagerView();
 }
+function createFinding(finding, warning = false) {
+  const row = document.createElement('div'); row.className = `finding${warning ? ' warning' : ''}`;
+  const icon = document.createElement('span'); icon.className = 'finding-icon'; icon.textContent = warning ? '!' : '↗';
+  const content = document.createElement('div');
+  const title = document.createElement('strong'); title.textContent = finding.title;
+  const description = document.createElement('p'); description.textContent = finding.description;
+  content.append(title, description); row.append(icon, content); return row;
+}
+function setReportEmpty() {
+  document.getElementById('analysisDate').textContent = 'Post-game report';
+  document.getElementById('analysisScore').textContent = 'Choose a completed match';
+  document.getElementById('analysisMeta').textContent = 'Finalized match data will appear here.';
+  document.getElementById('analysisOverall').textContent = '—';
+  document.getElementById('analysisOverallLabel').textContent = 'No report yet';
+  document.getElementById('analysisHeadline').textContent = 'Finish a match to generate a report';
+  document.getElementById('analysisSummary').textContent = 'The report uses your logged events, duels, player ratings, and final score.';
+  document.getElementById('analysisKeyStat').textContent = '—';
+  document.getElementById('analysisKeyStatLabel').textContent = 'Log match events to build insights';
+  document.getElementById('analysisStrengthCount').textContent = '0 trends';
+  document.getElementById('analysisFocusCount').textContent = '0 focus areas';
+  document.getElementById('analysisStrengths').replaceChildren(createFinding({ title: 'No completed-match data', description: 'Finish a match to generate strengths from recorded actions.' }));
+  document.getElementById('analysisFocus').replaceChildren(createFinding({ title: 'No completed-match data', description: 'Log events and duels during a completed match to identify focus areas.' }, true));
+  document.getElementById('analysisPlanTitle').textContent = 'Suggested focus: log more match data';
+  document.getElementById('analysisPlanText').textContent = 'Complete a match with events and duels to generate a targeted training recommendation.';
+}
+async function loadPostGameMatches() {
+  if (!currentTeam) return;
+  const select = document.getElementById('analysisMatchSelect');
+  const { data, error } = await supabase.from('matches').select('id,opponent_name,started_at,ended_at,clock_elapsed_seconds,team_score,opponent_score').eq('team_id', currentTeam.id).eq('status', 'final').order('ended_at', { ascending: false });
+  if (error || !data?.length) { completedMatches = []; select.innerHTML = '<option value="">No completed matches</option>'; setReportEmpty(); return; }
+  completedMatches = data;
+  if (!selectedReportMatchId || !completedMatches.some(match => match.id === selectedReportMatchId)) selectedReportMatchId = completedMatches[0].id;
+  select.innerHTML = completedMatches.map(match => `<option value="${match.id}" ${match.id === selectedReportMatchId ? 'selected' : ''}>vs. ${escapeHtml(match.opponent_name)} · ${new Date(match.ended_at || match.started_at).toLocaleDateString()}</option>`).join('');
+  await renderPostGameReport(completedMatches.find(match => match.id === selectedReportMatchId));
+}
+async function renderPostGameReport(match) {
+  if (!match) { setReportEmpty(); return; }
+  const [statsResult, eventsResult, duelsResult] = await Promise.all([
+    supabase.from('player_match_stats').select('player_id,goals,shots,shots_on_target,passes_completed,passes_attempted,tackles_won,interceptions,duels_won,duels_lost,rating').eq('match_id', match.id),
+    supabase.from('match_events').select('event_type').eq('match_id', match.id),
+    supabase.from('duels').select('outcome').eq('match_id', match.id)
+  ]);
+  const stats = statsResult.data ?? [];
+  const events = eventsResult.data ?? [];
+  const duels = duelsResult.data ?? [];
+  const sum = field => stats.reduce((total, stat) => total + (Number(stat[field]) || 0), 0);
+  const countEvent = type => events.filter(event => event.event_type === type).length;
+  const completedPasses = sum('passes_completed') || countEvent('pass_complete');
+  const attemptedPasses = sum('passes_attempted') || completedPasses + countEvent('pass_incomplete');
+  const passAccuracy = attemptedPasses ? Math.round((completedPasses / attemptedPasses) * 100) : null;
+  const duelsWon = sum('duels_won') || duels.filter(duel => duel.outcome === 'won').length;
+  const totalDuels = duels.length || duelsWon + sum('duels_lost');
+  const duelRate = totalDuels ? Math.round((duelsWon / totalDuels) * 100) : null;
+  const ratings = stats.filter(stat => stat.rating !== null).map(stat => Number(stat.rating)).filter(Number.isFinite);
+  const averageRating = ratings.length ? ratings.reduce((total, rating) => total + rating, 0) / ratings.length : null;
+  const scoreDifference = (match.team_score || 0) - (match.opponent_score || 0);
+  const overall = Math.max(1, Math.min(10, (averageRating ?? 6) + Math.max(-.5, Math.min(.5, scoreDifference * .2))));
+  const performanceLabel = overall >= 7.5 ? 'Strong collective display' : overall >= 6.5 ? 'Solid foundation to build on' : 'Clear opportunities to improve';
+  const strengths = [];
+  const focus = [];
+  if (passAccuracy !== null && passAccuracy >= 80) strengths.push({ title: 'Ball retention', description: `Completed ${completedPasses} of ${attemptedPasses} passes (${passAccuracy}%), showing reliable possession play.` });
+  if (duelRate !== null && duelRate >= 55) strengths.push({ title: 'Duel control', description: `Won ${duelsWon} of ${totalDuels} recorded duels (${duelRate}%).` });
+  if ((match.team_score || 0) > 0) strengths.push({ title: 'Finishing', description: `Scored ${match.team_score} goal${match.team_score === 1 ? '' : 's'} from ${sum('shots') || countEvent('shot_on_target') + countEvent('shot_off_target') + countEvent('goal')} recorded shots.` });
+  if (sum('interceptions') + countEvent('possession_won') >= 5) strengths.push({ title: 'Winning the ball back', description: `Recorded ${sum('interceptions')} interceptions and ${countEvent('possession_won')} possession wins.` });
+  if (passAccuracy !== null && passAccuracy < 75) focus.push({ title: 'Pass security', description: `Pass accuracy was ${passAccuracy}%. Prioritize support angles and decision-making under pressure.`, plan: 'Run a tight-space possession exercise with directional targets and a limited-touch constraint.' });
+  if (duelRate !== null && duelRate < 50) focus.push({ title: 'Duel resilience', description: `Won ${duelsWon} of ${totalDuels} duels (${duelRate}%). Improve body positioning and second-ball reactions.`, plan: 'Use 1v1 and second-ball transition drills with clear recovery roles.' });
+  const possessionWon = countEvent('possession_won'); const possessionLost = countEvent('possession_lost');
+  if (possessionLost > possessionWon) focus.push({ title: 'Turnover management', description: `Logged ${possessionLost} possession losses against ${possessionWon} recoveries.`, plan: 'Practice immediate support after receiving and a five-second counter-press on turnovers.' });
+  if (scoreDifference < 0) focus.push({ title: 'Turning performance into results', description: `Finished ${match.team_score}–${match.opponent_score}. Review decisive moments and chance quality.`, plan: 'Finish sessions with a score-based small-sided game emphasizing final-third choices.' });
+  if (!strengths.length) strengths.push({ title: 'Build the sample', description: 'Continue logging passes, duels, shots, and recoveries to reveal reliable strengths.' });
+  if (!focus.length) focus.push({ title: 'Maintain the standard', description: 'The tracked data did not reveal a major weakness. Keep collecting more matches for stronger trends.', plan: 'Review three successful sequences from the match and rehearse the same decisions in a small-sided game.' });
+  const bestPlayer = stats.filter(stat => stat.rating !== null).sort((a, b) => Number(b.rating) - Number(a.rating))[0];
+  const bestPlayerName = roster.find(player => player.id === bestPlayer?.player_id)?.name;
+  document.getElementById('analysisDate').textContent = `Full-time report · ${new Date(match.ended_at || match.started_at).toLocaleDateString()}`;
+  document.getElementById('analysisScore').textContent = `${currentTeam.name} ${match.team_score ?? 0} — ${match.opponent_score ?? 0} ${match.opponent_name}`;
+  document.getElementById('analysisMeta').textContent = `${formatClock(match.clock_elapsed_seconds || 0)} logged · ${events.length} events · ${totalDuels} duels`;
+  document.getElementById('analysisOverall').textContent = overall.toFixed(1);
+  document.getElementById('analysisOverallLabel').textContent = performanceLabel;
+  document.getElementById('analysisHeadline').textContent = scoreDifference > 0 ? 'A result supported by the recorded match actions' : scoreDifference === 0 ? 'A balanced result with clear lessons to carry forward' : 'A result that highlights specific areas to sharpen';
+  document.getElementById('analysisSummary').textContent = `Recorded ${events.length} team events, ${totalDuels} duels, ${passAccuracy === null ? 'no pass sample yet' : `${passAccuracy}% pass accuracy`}, and ${bestPlayerName ? `${bestPlayerName} as the top rated player` : 'no player rating sample yet'}.`;
+  document.getElementById('analysisKeyStat').textContent = duelRate === null ? `${events.length}` : `${duelRate}%`;
+  document.getElementById('analysisKeyStatLabel').textContent = duelRate === null ? 'Recorded match events' : 'Recorded duel win rate';
+  document.getElementById('analysisStrengthCount').textContent = `${strengths.length} positive trend${strengths.length === 1 ? '' : 's'}`;
+  document.getElementById('analysisFocusCount').textContent = `${focus.length} focus area${focus.length === 1 ? '' : 's'}`;
+  document.getElementById('analysisStrengths').replaceChildren(...strengths.slice(0, 3).map(finding => createFinding(finding)));
+  document.getElementById('analysisFocus').replaceChildren(...focus.slice(0, 3).map(finding => createFinding(finding, true)));
+  document.getElementById('analysisPlanTitle').textContent = `Suggested focus: ${focus[0].title.toLowerCase()}`;
+  document.getElementById('analysisPlanText').textContent = focus[0].plan;
+}
 async function syncPlayerMatchStats() {
   if (!currentMatch) return;
   const playerIds = new Set([...activeLineupIds, ...matchEvents.map(event => event.player_id), ...matchDuels.map(duel => duel.player_id)].filter(Boolean));
@@ -565,6 +656,10 @@ document.getElementById('scoreForm').addEventListener('submit', async event => {
   const opponentScore = Number(document.getElementById('opponentScoreInput').value);
   if (!Number.isInteger(teamScore) || !Number.isInteger(opponentScore) || teamScore < 0 || opponentScore < 0) return;
   await updateMatchClockState({ team_score: teamScore, opponent_score: opponentScore }, `Score updated: ${teamScore}–${opponentScore}.`);
+});
+document.getElementById('analysisMatchSelect').addEventListener('change', async event => {
+  selectedReportMatchId = event.target.value || null;
+  await renderPostGameReport(completedMatches.find(match => match.id === selectedReportMatchId));
 });
 
 teamForm.addEventListener('submit', async event => {
