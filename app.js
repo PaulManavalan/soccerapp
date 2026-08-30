@@ -259,6 +259,7 @@ async function makeSubstitution(inPlayer) {
   if (!currentMatch || !currentMatch.clock_running) { document.getElementById('operationsDetail').textContent = 'Start or resume the match clock before making a substitution.'; return; }
   const outPlayer = roster.find(player => player.id === selectedManagerPlayerId);
   const activeIds = getStarterIds();
+  if (getRedCardedPlayerIds().has(inPlayer.id)) { document.getElementById('operationsDetail').textContent = `${inPlayer.name} was sent off and cannot return.`; return; }
   if (!outPlayer || !activeIds.has(outPlayer.id)) { document.getElementById('operationsDetail').textContent = 'Select a player on the pitch first, then choose a substitute.'; return; }
   const clock = getMatchClockSeconds();
   const updatedAt = new Date().toISOString();
@@ -297,13 +298,15 @@ function selectManagerPlayer(player, minutes) {
   document.getElementById('statTackles').textContent = stats.tacklesWon;
 }
 function getStarterIds() {
+  const sentOff = getRedCardedPlayerIds();
   if (matchAppearances.length) {
     const now = getMatchClockSeconds();
-    return new Set(matchAppearances.filter(appearance => appearance.entered_at_seconds !== null && appearance.entered_at_seconds <= now && (appearance.exited_at_seconds === null || appearance.exited_at_seconds > now)).map(appearance => appearance.player_id));
+    return new Set(matchAppearances.filter(appearance => !sentOff.has(appearance.player_id) && appearance.entered_at_seconds !== null && appearance.entered_at_seconds <= now && (appearance.exited_at_seconds === null || appearance.exited_at_seconds > now)).map(appearance => appearance.player_id));
   }
   const matchdayPlayers = activeLineupIds.size ? roster.filter(player => activeLineupIds.has(player.id)) : roster;
-  return new Set(arrangeMatchdaySquad(matchdayPlayers).starters.map(player => player.id));
+  return new Set(arrangeMatchdaySquad(matchdayPlayers).starters.filter(player => !sentOff.has(player.id)).map(player => player.id));
 }
+function getRedCardedPlayerIds() { return new Set(matchEvents.filter(event => event.event_type === 'red_card').map(event => event.player_id)); }
 function getPlayerMinutes(playerId) {
   const appearance = matchAppearances.find(item => item.player_id === playerId);
   if (appearance) {
@@ -335,10 +338,8 @@ function renderManagerView() {
   const fallbackSquad = arrangeMatchdaySquad(matchdayPlayers);
   const activeIds = getStarterIds();
   const starters = matchAppearances.length ? arrangeMatchdaySquad(matchdayPlayers.filter(player => activeIds.has(player.id))).starters : fallbackSquad.starters;
-  const bench = matchAppearances.length ? matchdayPlayers.filter(player => {
-    const appearance = matchAppearances.find(item => item.player_id === player.id);
-    return appearance && appearance.entered_at_seconds === null;
-  }) : fallbackSquad.bench;
+  const sentOff = getRedCardedPlayerIds();
+  const bench = matchAppearances.length ? matchdayPlayers.filter(player => !activeIds.has(player.id) && !sentOff.has(player.id)) : fallbackSquad.bench.filter(player => !sentOff.has(player.id));
   starters.forEach((player, index) => {
     const [x, y] = formationSlots[index];
     const button = document.createElement('button');
@@ -359,8 +360,14 @@ function renderManagerView() {
     const name = document.createElement('strong'); name.textContent = player.name;
     const position = document.createElement('small'); position.textContent = `${player.position || 'Player'} · ${getPlayerMinutes(player.id)} min`;
     details.append(name, position);
-    const action = document.createElement('button'); action.type = 'button'; action.textContent = 'Bring on'; action.addEventListener('click', () => makeSubstitution(player));
+    const appearance = matchAppearances.find(item => item.player_id === player.id);
+    const action = document.createElement('button'); action.type = 'button'; action.textContent = appearance?.exited_at_seconds != null && appearance?.entered_at_seconds != null ? 'Re-enter' : 'Bring on'; action.addEventListener('click', () => makeSubstitution(player));
     row.append(avatar, details, action);
+    benchPanel.insertBefore(row, benchPanel.querySelector('.minutes-note'));
+  });
+  matchdayPlayers.filter(player => sentOff.has(player.id)).forEach(player => {
+    const row = document.createElement('div'); row.className = 'bench-player sent-off';
+    row.innerHTML = `<span class="avatar">${escapeHtml(playerInitials(player.name))}</span><div><strong>${escapeHtml(player.name)}</strong><small>Sent off · unavailable</small></div><span class="sent-off-label">Red card</span>`;
     benchPanel.insertBefore(row, benchPanel.querySelector('.minutes-note'));
   });
   benchPanel.querySelector('.status').textContent = bench.length ? `${bench.length} on bench` : 'No substitutes';
@@ -404,8 +411,9 @@ function renderTeamSettings() {
   }));
 }
 function renderDuelPlayerOptions() {
+  const eligiblePlayers = getEventPlayers();
   const filterOptions = roster.map(player => `<option value="${escapeHtml(player.name)}">#${player.shirt_number} ${escapeHtml(player.name)}</option>`).join('');
-  const logOptions = roster.map(player => `<option value="${player.id}">#${player.shirt_number} ${escapeHtml(player.name)}</option>`).join('');
+  const logOptions = eligiblePlayers.map(player => `<option value="${player.id}">#${player.shirt_number} ${escapeHtml(player.name)}</option>`).join('');
   const logSelect = document.getElementById('duelLogPlayer');
   const filterSelect = document.getElementById('duelPlayer');
   logSelect.innerHTML = `<option value="">Select player</option>${logOptions}`;
@@ -418,7 +426,8 @@ const eventLabels = {
   foul_committed: 'Foul committed', foul_won: 'Foul won', yellow_card: 'Yellow card', red_card: 'Red card'
 };
 function getEventPlayers() {
-  return activeLineupIds.size ? roster.filter(player => activeLineupIds.has(player.id)) : roster;
+  const activeIds = getStarterIds();
+  return activeIds.size ? roster.filter(player => activeIds.has(player.id)) : roster.filter(player => !getRedCardedPlayerIds().has(player.id));
 }
 function renderEventPlayerOptions() {
   const select = document.getElementById('eventLogPlayer');
@@ -904,13 +913,16 @@ document.getElementById('eventLogForm').addEventListener('submit', async event =
   const zoneMap = { central: { x: 50, y: 50 }, 'left-attacking': { x: 24, y: 27 }, 'right-attacking': { x: 76, y: 27 }, 'left-defensive': { x: 24, y: 74 }, 'right-defensive': { x: 76, y: 74 } };
   const zone = zoneMap[document.getElementById('eventLogZone').value];
   const payload = { match_id: currentMatch.id, player_id: playerId, event_type: document.getElementById('eventLogType').value, occurred_at_seconds: occurredAtSeconds, pitch_x: zone.x, pitch_y: zone.y, notes: document.getElementById('eventLogNotes').value.trim() || null };
+  if (!getEventPlayers().some(player => player.id === playerId)) { status.textContent = 'That player is not currently eligible to log an action.'; status.classList.add('is-error'); return; }
   status.classList.remove('is-error'); status.textContent = 'Saving event…';
-  const { data, error } = await supabase.from('match_events').insert(payload).select().single();
+  const eventsToSave = [payload];
+  if (payload.event_type === 'yellow_card' || payload.event_type === 'red_card') eventsToSave.push({ ...payload, event_type: 'foul_committed', notes: payload.notes ? `Automatic foul · ${payload.notes}` : 'Automatic foul from card' });
+  const { data, error } = await supabase.from('match_events').insert(eventsToSave).select();
   if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
-  matchEvents.push(data);
-  if (data.event_type === 'goal') await updateMatchClockState({ team_score: (currentMatch.team_score ?? 0) + 1 }, `Goal added at ${timeLabel(data.occurred_at_seconds)}.`);
-  event.target.reset(); status.textContent = `${eventLabels[data.event_type]} logged at ${timeLabel(data.occurred_at_seconds)}.`;
-  renderLiveStats(); renderEventTimeline(); await syncPlayerMatchStats(); renderManagerView();
+  matchEvents.push(...data);
+  if (payload.event_type === 'goal') await updateMatchClockState({ team_score: (currentMatch.team_score ?? 0) + 1 }, `Goal added at ${timeLabel(payload.occurred_at_seconds)}.`);
+  event.target.reset(); status.textContent = `${eventLabels[payload.event_type]} logged at ${timeLabel(payload.occurred_at_seconds)}.${eventsToSave.length > 1 ? ' Foul committed added automatically.' : ''}`;
+  renderDuelPlayerOptions(); renderEventPlayerOptions(); renderLiveStats(); renderEventTimeline(); await syncPlayerMatchStats(); renderManagerView();
 });
 
 markers.forEach(marker => { marker.dataset.initialOutcome = marker.dataset.outcome; });
@@ -936,7 +948,14 @@ async function save(marker, reviewStatus = 'confirmed') {
 function updateTotal() { const total = markers.length; const won = markers.filter(marker => marker.dataset.outcome === 'won').length; document.getElementById('duelTeamTotal').innerHTML = `${won} <i>/ ${total}</i>`; document.querySelector('.duel-total small').textContent = total ? `${Math.round((won / total) * 100)}% · target 58%` : 'No duels logged yet'; }
 function renderDetail(marker) { const confirm = document.getElementById('confirmDuel'); const change = document.getElementById('changeDuel'); if (!marker) { document.getElementById('duelDetailTitle').textContent = 'No duels logged yet'; document.getElementById('duelConfidence').textContent = 'Waiting for an event'; document.getElementById('duelClipLabel').textContent = 'Log a duel to review it here'; document.getElementById('duelClipTime').textContent = '—'; document.getElementById('duelPlayerName').textContent = '—'; document.getElementById('duelDetailType').textContent = '—'; document.getElementById('duelLocation').textContent = '—'; document.getElementById('duelDetailOutcome').textContent = '—'; confirm.disabled = true; change.disabled = true; return; } confirm.disabled = false; change.disabled = false; selected = marker; markers.forEach(item => item.classList.toggle('selected', item === marker)); const data = marker.dataset; const won = data.outcome === 'won'; const confirmed = data.confirmed === 'true'; document.getElementById('duelDetailTitle').textContent = `${data.player} · ${won ? 'Won' : 'Lost'}`; const confidence = document.getElementById('duelConfidence'); confidence.textContent = confirmed ? 'Confirmed' : `${data.confidence}% confidence`; confidence.className = `status ${confirmed || data.confidence >= 75 ? 'good' : 'watch'}`; document.getElementById('duelClipLabel').textContent = confirmed ? 'Coach reviewed' : 'Suggested event'; document.getElementById('duelClipTime').textContent = data.time; document.getElementById('duelPlayerName').textContent = `#${data.number} ${data.player}`; document.getElementById('duelDetailType').textContent = `${data.type[0].toUpperCase()}${data.type.slice(1)} duel`; document.getElementById('duelLocation').textContent = data.zone; const outcome = document.getElementById('duelDetailOutcome'); outcome.textContent = won ? 'Won · retained possession' : 'Lost · opponent progressed'; outcome.className = won ? 'outcome-won' : 'outcome-lost'; confirm.textContent = confirmed ? 'Confirmed' : 'Confirm result'; document.getElementById('reviewNote').textContent = confirmed ? (data.duelId ? 'Coach-reviewed event saved to this match.' : 'Coach-reviewed event. Create a match to sync it to Supabase.') : 'Suggested event — confirm it or make a correction.'; document.getElementById('correctionPanel').hidden = true; }
 function filterMarkers() { const player = document.getElementById('duelPlayer').value, type = document.getElementById('duelType').value, outcome = document.getElementById('duelOutcome').value; markers.forEach(marker => { marker.hidden = !((player === 'all' || marker.dataset.player === player) && (type === 'all' || marker.dataset.type === type) && (outcome === 'all' || marker.dataset.outcome === outcome)); }); }
-document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => { document.querySelectorAll('.tab,.tab-view').forEach(element => element.classList.remove('active')); tab.classList.add('active'); document.getElementById(tab.dataset.tab).classList.add('active'); }));
+function activateTab(tabId) { const tab = document.querySelector(`.tab[data-tab="${tabId}"]`); if (!tab) return; document.querySelectorAll('.tab,.tab-view').forEach(element => element.classList.remove('active')); tab.classList.add('active'); document.getElementById(tabId).classList.add('active'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => activateTab(tab.dataset.tab)));
+document.querySelector('a[href="#matches"]')?.addEventListener('click', event => { event.preventDefault(); activateTab('match'); });
+document.querySelector('a[href="#squad"]')?.addEventListener('click', event => { event.preventDefault(); activateTab('manager'); });
+document.querySelector('a[href="#reports"]')?.addEventListener('click', event => { event.preventDefault(); activateTab('analysis'); });
+document.querySelector('.match-banner .match-button')?.addEventListener('click', () => activateTab('match'));
+document.querySelector('.manager-head .match-button')?.addEventListener('click', () => { activateTab('manager'); document.querySelector('.bench-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+document.querySelector('.insight-card a[href="#tactics"]')?.addEventListener('click', event => { event.preventDefault(); activateTab('analysis'); });
 document.querySelectorAll('.formation-player').forEach(player => player.addEventListener('click', () => { document.querySelectorAll('.formation-player').forEach(item => item.classList.remove('active')); player.classList.add('active'); const data = player.dataset; const card = document.getElementById('selectedPlayer'); card.querySelector('.selected-number').textContent = data.number; card.querySelector('.eyebrow').textContent = data.position; card.querySelector('h2').innerHTML = `${data.name} <span>${data.rating}</span>`; card.querySelector('small').textContent = `${data.minutes} minutes played`; document.getElementById('statMinutes').textContent = `${data.minutes}'`; document.getElementById('statPasses').textContent = data.passes; document.getElementById('statShots').textContent = data.shots; document.getElementById('statTackles').textContent = data.tackles; }));
 markers.forEach(marker => { applyStored(marker); attachDuelMarker(marker); }); filters.forEach(id => document.getElementById(id).addEventListener('change', filterMarkers));
 document.getElementById('confirmDuel').addEventListener('click', async () => { if (!selected) return; selected.dataset.confirmed = 'true'; await save(selected); renderDetail(selected); });
