@@ -88,6 +88,22 @@ function renderTeamSwitcher() {
   teamSwitcher.innerHTML = availableTeams.length ? availableTeams.map(team => `<option value="${team.id}" ${team.id === currentTeam?.id ? 'selected' : ''}>${escapeHtml(team.name)}</option>`).join('') : '<option value="">No team yet</option>';
   teamSwitcher.disabled = availableTeams.length < 2;
 }
+async function ensureCurrentUserTeamMembership(teamId) {
+  const { data: existingMembership, error: lookupError } = await supabase
+    .from('team_members')
+    .select('team_id')
+    .eq('team_id', teamId)
+    .eq('user_id', currentUser.id)
+    .maybeSingle();
+  if (lookupError) return lookupError;
+  if (existingMembership) return null;
+
+  const { error: insertError } = await supabase
+    .from('team_members')
+    .insert({ team_id: teamId, user_id: currentUser.id, role: 'coach' });
+  // A previous request may have completed while this one was in progress.
+  return insertError?.code === '23505' ? null : insertError;
+}
 function defaultCoachName() {
   return (currentUser?.email || 'Coach').split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 }
@@ -733,10 +749,7 @@ document.getElementById('newTeamForm').addEventListener('submit', async event =>
   status.classList.remove('is-error'); status.textContent = 'Creating team workspace…';
   const { data: team, error: teamError } = await supabase.from('teams').insert({ name, created_by: currentUser.id }).select('id,name').single();
   if (teamError) { status.textContent = teamError.message; status.classList.add('is-error'); return; }
-  const { error: membershipError } = await supabase.from('team_members').upsert(
-    { team_id: team.id, user_id: currentUser.id, role: 'coach' },
-    { onConflict: 'team_id,user_id' }
-  );
+  const membershipError = await ensureCurrentUserTeamMembership(team.id);
   if (membershipError) { status.textContent = membershipError.message; status.classList.add('is-error'); return; }
   localStorage.setItem(`touchline-active-team-${currentUser.id}`, team.id);
   input.value = ''; status.textContent = `${name} is ready for its roster.`; await loadTeamWorkspace();
@@ -768,10 +781,7 @@ teamForm.addEventListener('submit', async event => {
     team = createdTeam;
   }
   if (!hasTeamMembership) {
-    const { error: memberError } = await supabase.from('team_members').upsert(
-      { team_id: team.id, user_id: currentUser.id, role: 'coach' },
-      { onConflict: 'team_id,user_id' }
-    );
+    const memberError = await ensureCurrentUserTeamMembership(team.id);
     if (memberError) { teamStatus.textContent = memberError.message; teamStatus.classList.add('is-error'); return; }
   }
   const players = roster.map(([shirtNumber, playerName, position = null]) => ({ team_id: team.id, shirt_number: Number(shirtNumber), name: playerName, position }));
