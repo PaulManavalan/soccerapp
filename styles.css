@@ -404,6 +404,9 @@ h2{font-size:17px;letter-spacing:-.55px;margin-bottom:0}
 .duel-log-panel select,.duel-log-panel input{min-width:0;height:34px;border:1px solid #dce4de;border-radius:6px;padding:0 8px;background:#fff;font:10px Manrope;color:#263e31}
 .duel-log-panel button{border:0;border-radius:6px;background:#357d51;color:#fff;padding:0 11px;font:800 10px Manrope;cursor:pointer;white-space:nowrap}
 .duel-log-panel .auth-status{grid-column:2;margin:0}
+.clip-upload-panel{margin-top:14px;background:#f4f8f4;border:1px solid #d8e6da;border-radius:10px;padding:15px 17px;display:grid;grid-template-columns:185px 1fr;gap:8px 18px;align-items:center}
+.clip-upload-panel h2{font-size:15px;margin:0}.clip-upload-panel .eyebrow{margin-bottom:4px}.clip-upload-panel p{margin:0;color:#6b7c71;font-size:10px;line-height:1.5}
+.clip-upload-panel form{display:grid;grid-template-columns:1fr 1.25fr 1.25fr auto;gap:7px}.clip-upload-panel select,.clip-upload-panel input{min-width:0;height:34px;border:1px solid #d4e0d6;border-radius:6px;padding:0 8px;background:#fff;font:10px Manrope;color:#263e31}.clip-upload-panel input[type=file]{padding:7px}.clip-upload-panel button{border:0;border-radius:6px;background:#193528;color:#fff;padding:0 11px;font:800 10px Manrope;cursor:pointer;white-space:nowrap}.clip-upload-panel .auth-status{grid-column:2;margin:0}.clip-job-list{grid-column:2;display:grid;gap:6px}.clip-job{background:#fff;border:1px solid #e0e8e1;border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;gap:10px;align-items:center}.clip-job strong{font-size:10px}.clip-job small{display:block;color:#7b8a7f;font-size:9px;margin-top:2px}.clip-job .status{font-size:8px;white-space:nowrap}
 .duel-marker.won{background:#3ca46d;border:2px solid #d4f5bb}
 .duel-marker.lost{background:#dc644b;border:2px solid #ffd0c4}
 .duel-marker.aerial:after{content:"";position:absolute;width:39px;height:39px;border-radius:50%;border:1px dashed rgba(255,255,255,.8)}
@@ -491,7 +494,7 @@ main{padding:22px 16px}
 .report-hero,.manager-head{padding:20px;display:block}
 
 .duel-hero{padding:20px;display:block}
-.duel-log-panel{display:block}.duel-log-panel form{grid-template-columns:1fr 1fr;margin-top:12px}.duel-log-panel form select:first-child{grid-column:1/3}.duel-log-panel form select:last-of-type{grid-column:1/3}.duel-log-panel form button{grid-column:1/3;height:34px}.duel-log-panel .auth-status{margin-top:8px}
+.duel-log-panel{display:block}.duel-log-panel form{grid-template-columns:1fr 1fr;margin-top:12px}.duel-log-panel form select:first-child{grid-column:1/3}.duel-log-panel form select:last-of-type{grid-column:1/3}.duel-log-panel form button{grid-column:1/3;height:34px}.duel-log-panel .auth-status{margin-top:8px}.clip-upload-panel{display:block}.clip-upload-panel form{grid-template-columns:1fr 1fr;margin-top:12px}.clip-upload-panel input,.clip-upload-panel select,.clip-upload-panel button{grid-column:1/3;height:34px}.clip-upload-panel .auth-status{margin-top:8px}.clip-job-list{margin-top:10px}.clip-job-list{display:grid}
 .live-event-panel{display:block}.live-event-panel form{grid-template-columns:1fr 1fr;margin-top:12px}.live-event-panel form select:first-child,.live-event-panel form input{grid-column:1/3}.live-event-panel form button{grid-column:1/3;height:34px}.live-event-panel .auth-status{margin-top:8px}
 .match-operations{display:block}.clock-control{justify-items:start;margin:14px 0}.operation-actions{display:grid;grid-template-columns:1fr 1fr 1fr}.operation-actions button{padding:10px 5px}
 .duel-total{margin-top:16px;width:max-content}
