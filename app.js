@@ -84,7 +84,10 @@ async function loadTeamData() {
     activeLineupIds = new Set((lineup ?? []).map(row => row.player_id));
     const { data: appearances, error: appearancesError } = await supabase.from('match_player_appearances').select('player_id,is_starter,entered_at_seconds,exited_at_seconds').eq('match_id', currentMatch.id);
     matchAppearances = appearancesError ? [] : (appearances ?? []);
-    if (!appearancesError && !matchAppearances.length && activeLineupIds.size) await seedMatchAppearances();
+    if (!appearancesError && activeLineupIds.size) {
+      if (!matchAppearances.length) await seedMatchAppearances();
+      else await seedMissingMatchAppearances();
+    }
   }
   renderMatchSetup();
   renderMatchOperations();
@@ -161,6 +164,15 @@ async function seedMatchAppearances() {
   const { data, error } = await supabase.from('match_player_appearances').upsert(rows, { onConflict: 'match_id,player_id' }).select('player_id,is_starter,entered_at_seconds,exited_at_seconds');
   if (!error) matchAppearances = data ?? [];
 }
+async function seedMissingMatchAppearances() {
+  if (!currentMatch) return;
+  const existingIds = new Set(matchAppearances.map(appearance => appearance.player_id));
+  const missingPlayers = roster.filter(player => activeLineupIds.has(player.id) && !existingIds.has(player.id));
+  if (!missingPlayers.length) return;
+  const rows = missingPlayers.map(player => ({ match_id: currentMatch.id, player_id: player.id, is_starter: false, entered_at_seconds: null }));
+  const { data, error } = await supabase.from('match_player_appearances').insert(rows).select('player_id,is_starter,entered_at_seconds,exited_at_seconds');
+  if (!error) matchAppearances = [...matchAppearances, ...(data ?? [])];
+}
 function getMatchClockSeconds() {
   if (!currentMatch) return 0;
   const elapsed = currentMatch.clock_elapsed_seconds || 0;
@@ -216,15 +228,14 @@ async function makeSubstitution(inPlayer) {
   const activeIds = getStarterIds();
   if (!outPlayer || !activeIds.has(outPlayer.id)) { document.getElementById('operationsDetail').textContent = 'Select a player on the pitch first, then choose a substitute.'; return; }
   const clock = getMatchClockSeconds();
-  const { error: offError } = await supabase.from('match_player_appearances').update({ exited_at_seconds: clock, updated_at: new Date().toISOString() }).eq('match_id', currentMatch.id).eq('player_id', outPlayer.id);
-  if (offError) { document.getElementById('operationsDetail').textContent = offError.message; return; }
-  const { error: onError } = await supabase.from('match_player_appearances').update({ entered_at_seconds: clock, updated_at: new Date().toISOString() }).eq('match_id', currentMatch.id).eq('player_id', inPlayer.id);
+  const updatedAt = new Date().toISOString();
+  const { error: onError } = await supabase.from('match_player_appearances').upsert({ match_id: currentMatch.id, player_id: inPlayer.id, is_starter: false, entered_at_seconds: clock, exited_at_seconds: null, updated_at: updatedAt }, { onConflict: 'match_id,player_id' });
   if (onError) { document.getElementById('operationsDetail').textContent = onError.message; return; }
-  matchAppearances = matchAppearances.map(appearance => {
-    if (appearance.player_id === outPlayer.id) return { ...appearance, exited_at_seconds: clock };
-    if (appearance.player_id === inPlayer.id) return { ...appearance, entered_at_seconds: clock };
-    return appearance;
-  });
+  const { data: offAppearance, error: offError } = await supabase.from('match_player_appearances').update({ exited_at_seconds: clock, updated_at: updatedAt }).eq('match_id', currentMatch.id).eq('player_id', outPlayer.id).select('player_id').maybeSingle();
+  if (offError || !offAppearance) { document.getElementById('operationsDetail').textContent = offError?.message || 'The outgoing player appearance could not be found.'; return; }
+  const { data: appearances, error: appearancesError } = await supabase.from('match_player_appearances').select('player_id,is_starter,entered_at_seconds,exited_at_seconds').eq('match_id', currentMatch.id);
+  if (appearancesError) { document.getElementById('operationsDetail').textContent = appearancesError.message; return; }
+  matchAppearances = appearances ?? [];
   selectedManagerPlayerId = inPlayer.id;
   await syncPlayerMatchStats(); renderManagerView();
   document.getElementById('operationsDetail').textContent = `${inPlayer.name} replaced ${outPlayer.name} at ${formatClock(clock)}.`;

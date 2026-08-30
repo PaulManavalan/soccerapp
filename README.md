@@ -26,6 +26,10 @@ The app now uses an email-and-password sign-in flow. New coaches choose **Create
 
 The secret/service-role key must never be placed in browser code or committed to Git.
 
+## Free hosting fallback
+
+This repository includes `.github/workflows/deploy-pages.yml` for GitHub Pages. In the GitHub repository, open **Settings → Pages**, set the source to **GitHub Actions**, and the next push to `main` will publish the site to the Pages URL shown in the workflow run. This works as a no-cost static-hosting alternative to Netlify.
+
 ## Duels MVP
 
 The first Duels workflow is designed for coach review:
