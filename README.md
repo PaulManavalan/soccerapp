@@ -31,6 +31,10 @@ The secret/service-role key must never be placed in browser code or committed to
 
 This repository includes `.github/workflows/deploy-pages.yml` for GitHub Pages. In the GitHub repository, open **Settings → Pages**, set the source to **GitHub Actions**, and the next push to `main` will publish the site to the Pages URL shown in the workflow run. This works as a no-cost static-hosting alternative to Netlify.
 
+## Coach invitations
+
+The invitation UI calls the secure Edge Function in `supabase/functions/invite-coach/index.ts`. Deploy it once with `supabase functions deploy invite-coach` while linked to this Supabase project. In **Authentication → URL Configuration**, add your deployed app URL as an allowed redirect URL. Invitations use Supabase Auth email delivery, so configure a custom SMTP provider before inviting a real staff group.
+
 ## Duels MVP
 
 The first Duels workflow is designed for coach review:

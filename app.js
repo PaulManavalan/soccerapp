@@ -738,6 +738,19 @@ document.getElementById('newTeamForm').addEventListener('submit', async event =>
   localStorage.setItem(`touchline-active-team-${currentUser.id}`, team.id);
   input.value = ''; status.textContent = `${name} is ready for its roster.`; await loadTeamWorkspace();
 });
+document.getElementById('inviteCoachForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!currentTeam) return;
+  const emailInput = document.getElementById('inviteCoachEmail');
+  const status = document.getElementById('inviteCoachStatus');
+  const email = emailInput.value.trim();
+  status.classList.remove('is-error'); status.textContent = 'Sending coach invitation…';
+  const { data, error } = await supabase.functions.invoke('invite-coach', {
+    body: { email, teamId: currentTeam.id, role: document.getElementById('inviteCoachRole').value, redirectTo: window.location.href },
+  });
+  if (error || data?.error) { status.textContent = data?.error || error?.message || 'Unable to send invitation.'; status.classList.add('is-error'); return; }
+  emailInput.value = ''; status.textContent = data.invitationSent ? `Invitation sent to ${data.email}.` : `${data.email} already has an account and was added to this team.`;
+});
 
 teamForm.addEventListener('submit', async event => {
   event.preventDefault();
