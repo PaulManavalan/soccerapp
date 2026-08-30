@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<section id="authGate" class="auth-gate" aria-labelledby="authTitle"><div class="auth-card"><a class="brand" href="#"><span class="brand-mark">T</span>touchline</a><p class="eyebrow">Coach access</p><h1 id="authTitle">Sign in to your team</h1><p id="authIntro">Use your coach email and password to access your team.</p><form id="authForm"><label for="authEmail">Coach email</label><input id="authEmail" type="email" autocomplete="email" placeholder="coach@school.edu" required><label for="authPassword">Password</label><input id="authPassword" type="password" autocomplete="current-password" minlength="8" placeholder="At least 8 characters" required><button id="authSubmit" type="submit">Sign in <span>→</span></button></form><button id="authModeToggle" class="auth-link" type="button">New coach? Create an account</button><p id="authStatus" class="auth-status" role="status">Your match data stays private to your coaching staff.</p></div></section>
+<section id="authGate" class="auth-gate" aria-labelledby="authTitle"><div class="auth-card"><a class="brand" href="#"><span class="brand-mark">T</span>touchline</a><p class="eyebrow">Coach access</p><h1 id="authTitle">Sign in to your team</h1><p id="authIntro">Use your coach email and password to access your team.</p><form id="authForm"><label id="authEmailLabel" for="authEmail">Coach email</label><input id="authEmail" type="email" autocomplete="email" placeholder="coach@school.edu" required><label id="authPasswordLabel" for="authPassword">Password</label><input id="authPassword" type="password" autocomplete="current-password" minlength="8" placeholder="At least 8 characters" required><button id="authSubmit" type="submit">Sign in <span>→</span></button></form><button id="authModeToggle" class="auth-link" type="button">New coach? Create an account</button><button id="authResetButton" class="auth-link" type="button">Forgot password?</button><p id="authStatus" class="auth-status" role="status">Your match data stays private to your coaching staff.</p></div></section>
 <section id="teamOnboarding" class="auth-gate" aria-labelledby="teamTitle" hidden><div class="auth-card"><a class="brand" href="#"><span class="brand-mark">T</span>touchline</a><p class="eyebrow">First-time setup</p><h1 id="teamTitle">Set up your team</h1><p>Create the team workspace and add the first roster. You can edit players later.</p><form id="teamForm"><label for="teamName">Team name</label><input id="teamName" type="text" value="Summit FC" required><label for="teamRoster">Starter roster</label><textarea id="teamRoster" rows="7" required>1, Alex Morgan, GK&#10;4, Jordan Lee, CB&#10;5, Matteo Ruiz, CB&#10;8, Noah Williams, CM&#10;10, Ethan Park, AM&#10;9, Luca Bennett, ST</textarea><small>One player per line: shirt number, name, position.</small><button type="submit">Create team workspace <span>→</span></button></form><p id="teamStatus" class="auth-status" role="status"></p></div></section>
 <div class="app-shell">
 <aside class="sidebar">
@@ -32,13 +32,13 @@
 <strong data-team-name>Summit FC</strong>
 <small>Men's First Team</small>
 </div>
-<button aria-label="Switch team">⌄</button>
+<select id="teamSwitcher" class="team-switcher" aria-label="Switch team"><option>Loading teams…</option></select>
 </div>
 <a class="profile" href="#profile">
 <span class="avatar">JD</span>
 <span>
-<strong>Jamie Davis</strong>
-<small>Head Coach</small>
+<strong data-coach-name>Coach</strong>
+<small data-coach-email>Head Coach</small>
 </span>
 <b>•••</b>
 </a>
@@ -47,7 +47,7 @@
 <header class="topbar">
 <div>
 <p class="eyebrow">Friday, August 15</p>
-<h1>Good morning, Jamie</h1>
+<h1 id="coachGreeting">Good morning, Coach</h1>
 </div>
 <div class="top-actions">
 <button class="icon-button" aria-label="Notifications">♧<i>
@@ -556,7 +556,7 @@
 <button>View clips →</button>
 </section>
 </section>
-<section class="tab-view" id="settings"><section class="settings-hero"><div><p class="eyebrow">Team workspace</p><h2>Settings &amp; roster</h2><p>Manage the team name and the players available for future matchday lineups.</p></div></section><section class="settings-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Club details</p><h2>Team name</h2></div></div><form id="teamSettingsForm" class="settings-form"><label for="settingsTeamName">Team name</label><input id="settingsTeamName" type="text" required><button type="submit">Save team name</button><p id="teamSettingsStatus" class="auth-status" role="status"></p></form></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Add a player</p><h2>Roster</h2></div></div><form id="playerForm" class="player-form"><input id="playerNumber" type="number" min="1" max="99" placeholder="#" required><input id="playerName" type="text" placeholder="Player name" required><input id="playerPosition" type="text" placeholder="Position"><button type="submit">Add player</button></form><p id="playerFormStatus" class="auth-status" role="status"></p><div id="rosterManager" class="roster-manager"><p class="empty-lineup">Your roster will appear here.</p></div></article></section></section>
+<section class="tab-view" id="settings"><section class="settings-hero"><div><p class="eyebrow">Team workspace</p><h2>Settings &amp; roster</h2><p>Manage your coach identity, teams, and the players available for future matchday lineups.</p></div></section><section class="settings-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Coach account</p><h2>Your profile</h2></div></div><form id="coachProfileForm" class="settings-form"><label for="coachDisplayName">Display name</label><input id="coachDisplayName" type="text" maxlength="80" required><label>Signed-in email</label><input id="coachEmail" type="email" disabled><button type="submit">Save profile</button><p id="coachProfileStatus" class="auth-status" role="status"></p></form></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Club details</p><h2>Team name</h2></div></div><form id="teamSettingsForm" class="settings-form"><label for="settingsTeamName">Team name</label><input id="settingsTeamName" type="text" required><button type="submit">Save team name</button><p id="teamSettingsStatus" class="auth-status" role="status"></p></form><form id="newTeamForm" class="settings-form create-team-form"><label for="newTeamName">Create another team</label><input id="newTeamName" type="text" placeholder="e.g. Summit FC JV" required><button type="submit">Create team workspace</button><p id="newTeamStatus" class="auth-status" role="status"></p></form></article><article class="panel roster-panel"><div class="panel-heading"><div><p class="eyebrow">Add a player</p><h2>Roster</h2></div></div><form id="playerForm" class="player-form"><input id="playerNumber" type="number" min="1" max="99" placeholder="#" required><input id="playerName" type="text" placeholder="Player name" required><input id="playerPosition" type="text" placeholder="Position"><button type="submit">Add player</button></form><p id="playerFormStatus" class="auth-status" role="status"></p><div id="rosterManager" class="roster-manager"><p class="empty-lineup">Your roster will appear here.</p></div></article></section></section>
 </main>
 </div>
 <script type="module" src="app.js"></script>

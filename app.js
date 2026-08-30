@@ -11,16 +11,20 @@ let selected = null;
 const authGate = document.getElementById('authGate');
 const authForm = document.getElementById('authForm');
 const authEmail = document.getElementById('authEmail');
+const authEmailLabel = document.getElementById('authEmailLabel');
 const authPassword = document.getElementById('authPassword');
+const authPasswordLabel = document.getElementById('authPasswordLabel');
 const authTitle = document.getElementById('authTitle');
 const authIntro = document.getElementById('authIntro');
 const authSubmit = document.getElementById('authSubmit');
 const authModeToggle = document.getElementById('authModeToggle');
+const authResetButton = document.getElementById('authResetButton');
 const authStatus = document.getElementById('authStatus');
 const signOutButton = document.getElementById('signOutButton');
 const teamOnboarding = document.getElementById('teamOnboarding');
 const teamForm = document.getElementById('teamForm');
 const teamStatus = document.getElementById('teamStatus');
+const teamSwitcher = document.getElementById('teamSwitcher');
 let currentUser = null;
 let currentTeam = null;
 let hasTeamMembership = false;
@@ -34,6 +38,7 @@ let selectedManagerPlayerId = null;
 let matchClockInterval = null;
 let completedMatches = [];
 let selectedReportMatchId = null;
+let availableTeams = [];
 let authMode = 'sign-in';
 
 function setAuthStatus(message, isError = false) {
@@ -50,24 +55,52 @@ function setSession(session) {
 }
 function renderAuthMode() {
   const isSignUp = authMode === 'sign-up';
-  authTitle.textContent = isSignUp ? 'Create coach account' : 'Sign in to your team';
-  authIntro.textContent = isSignUp ? 'Create a password-protected coach account for your team.' : 'Use your coach email and password to access your team.';
-  authPassword.autocomplete = isSignUp ? 'new-password' : 'current-password';
-  authSubmit.innerHTML = `${isSignUp ? 'Create account' : 'Sign in'} <span>→</span>`;
-  authModeToggle.textContent = isSignUp ? 'Already have an account? Sign in' : 'New coach? Create an account';
+  const isReset = authMode === 'reset';
+  const isNewPassword = authMode === 'new-password';
+  authTitle.textContent = isNewPassword ? 'Choose a new password' : isReset ? 'Reset your password' : isSignUp ? 'Create coach account' : 'Sign in to your team';
+  authIntro.textContent = isNewPassword ? 'Enter a new password to finish resetting your account.' : isReset ? 'We will send a password-reset link to your coach email.' : isSignUp ? 'Create a password-protected coach account for your team.' : 'Use your coach email and password to access your team.';
+  authEmail.hidden = isNewPassword; authEmailLabel.hidden = isNewPassword; authEmail.required = !isNewPassword;
+  authPassword.hidden = isReset; authPasswordLabel.hidden = isReset; authPassword.required = !isReset;
+  authPasswordLabel.textContent = isNewPassword ? 'New password' : 'Password';
+  authPassword.autocomplete = isSignUp || isNewPassword ? 'new-password' : 'current-password';
+  authSubmit.innerHTML = `${isNewPassword ? 'Save new password' : isReset ? 'Send reset link' : isSignUp ? 'Create account' : 'Sign in'} <span>→</span>`;
+  authModeToggle.textContent = isReset ? 'Back to sign in' : isSignUp ? 'Already have an account? Sign in' : 'New coach? Create an account';
+  authModeToggle.hidden = isNewPassword; authResetButton.hidden = isSignUp || isReset || isNewPassword;
   setAuthStatus('Your match data stays private to your coaching staff.');
 }
 async function loadTeamWorkspace() {
   if (!currentUser) return;
-  const { data, error } = await supabase.from('teams').select('id,name').limit(1);
+  const { data, error } = await supabase.from('teams').select('id,name').order('created_at');
   if (error) return setAuthStatus('Your account is signed in, but the team workspace could not load.', true);
-  currentTeam = data?.[0] ?? null;
+  availableTeams = data ?? [];
+  const savedTeamId = localStorage.getItem(`touchline-active-team-${currentUser.id}`);
+  currentTeam = availableTeams.find(team => team.id === savedTeamId) ?? availableTeams[0] ?? null;
+  renderTeamSwitcher();
+  await loadCoachProfile();
   if (currentTeam) {
     const { data: membership } = await supabase.from('team_members').select('team_id').eq('team_id', currentTeam.id).maybeSingle();
     hasTeamMembership = Boolean(membership);
   }
   teamOnboarding.hidden = Boolean(currentTeam && hasTeamMembership);
   if (currentTeam && hasTeamMembership) await loadTeamData();
+}
+function renderTeamSwitcher() {
+  teamSwitcher.innerHTML = availableTeams.length ? availableTeams.map(team => `<option value="${team.id}" ${team.id === currentTeam?.id ? 'selected' : ''}>${escapeHtml(team.name)}</option>`).join('') : '<option value="">No team yet</option>';
+  teamSwitcher.disabled = availableTeams.length < 2;
+}
+function defaultCoachName() {
+  return (currentUser?.email || 'Coach').split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+}
+async function loadCoachProfile() {
+  if (!currentUser) return;
+  const fallbackName = defaultCoachName();
+  const { data } = await supabase.from('coach_profiles').select('display_name').eq('user_id', currentUser.id).maybeSingle();
+  const displayName = data?.display_name || fallbackName;
+  document.getElementById('coachDisplayName').value = displayName;
+  document.getElementById('coachEmail').value = currentUser.email || '';
+  document.querySelectorAll('[data-coach-name]').forEach(node => { node.textContent = displayName; });
+  document.querySelectorAll('[data-coach-email]').forEach(node => { node.textContent = currentUser.email || 'Head Coach'; });
+  document.getElementById('coachGreeting').textContent = `Good morning, ${displayName.split(' ')[0]}`;
 }
 async function loadTeamData() {
   const { data: players, error: playersError } = await supabase.from('players').select('id,name,shirt_number,position').eq('team_id', currentTeam.id).order('shirt_number');
@@ -600,8 +633,19 @@ authForm.addEventListener('submit', async event => {
   event.preventDefault();
   const email = authEmail.value.trim();
   const password = authPassword.value;
-  if (!email || !password) return;
-  if (password.length < 8) return setAuthStatus('Use a password with at least 8 characters.', true);
+  if ((!email && authMode !== 'new-password') || (authMode !== 'reset' && !password)) return;
+  if (authMode !== 'reset' && password.length < 8) return setAuthStatus('Use a password with at least 8 characters.', true);
+  if (authMode === 'new-password') {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) return setAuthStatus(error.message, true);
+    authPassword.value = ''; setSession((await supabase.auth.getSession()).data.session); return setAuthStatus('Password updated.');
+  }
+  if (authMode === 'reset') {
+    setAuthStatus('Sending password reset link…');
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+    if (error) return setAuthStatus(error.message, true);
+    return setAuthStatus(`Check ${email} for your password reset link.`);
+  }
   const isSignUp = authMode === 'sign-up';
   setAuthStatus(isSignUp ? 'Creating your coach account…' : 'Signing you in…');
   const { data, error } = isSignUp
@@ -611,7 +655,8 @@ authForm.addEventListener('submit', async event => {
   if (isSignUp && !data.session) return setAuthStatus('Account created. Confirm the email if email confirmation is enabled in Supabase.');
   setAuthStatus(isSignUp ? 'Account created. Opening your team workspace…' : 'Signed in. Opening your team workspace…');
 });
-authModeToggle.addEventListener('click', () => { authMode = authMode === 'sign-in' ? 'sign-up' : 'sign-in'; renderAuthMode(); });
+authModeToggle.addEventListener('click', () => { authMode = authMode === 'reset' ? 'sign-in' : authMode === 'sign-in' ? 'sign-up' : 'sign-in'; renderAuthMode(); });
+authResetButton.addEventListener('click', () => { authMode = 'reset'; renderAuthMode(); });
 signOutButton.addEventListener('click', async () => {
   signOutButton.disabled = true;
   const { error } = await supabase.auth.signOut({ scope: 'local' });
@@ -627,7 +672,7 @@ signOutButton.addEventListener('click', async () => {
   setSession(null);
   setAuthStatus('You have been signed out.');
 });
-supabase.auth.onAuthStateChange((_event, session) => { setSession(session); if (session) loadTeamWorkspace(); });
+supabase.auth.onAuthStateChange((event, session) => { setSession(session); if (event === 'PASSWORD_RECOVERY') { authMode = 'new-password'; renderAuthMode(); authGate.hidden = false; } if (session) loadTeamWorkspace(); });
 renderAuthMode();
 initialiseAuth();
 
@@ -661,6 +706,38 @@ document.getElementById('analysisMatchSelect').addEventListener('change', async 
   selectedReportMatchId = event.target.value || null;
   await renderPostGameReport(completedMatches.find(match => match.id === selectedReportMatchId));
 });
+teamSwitcher.addEventListener('change', async event => {
+  if (!currentUser || !event.target.value) return;
+  localStorage.setItem(`touchline-active-team-${currentUser.id}`, event.target.value);
+  currentTeam = availableTeams.find(team => team.id === event.target.value) ?? null;
+  await loadTeamWorkspace();
+});
+document.getElementById('coachProfileForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!currentUser) return;
+  const displayName = document.getElementById('coachDisplayName').value.trim();
+  const status = document.getElementById('coachProfileStatus');
+  if (!displayName) return;
+  const { error } = await supabase.from('coach_profiles').upsert({ user_id: currentUser.id, display_name: displayName, updated_at: new Date().toISOString() });
+  if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
+  status.classList.remove('is-error'); status.textContent = 'Coach profile saved.';
+  await loadCoachProfile();
+});
+document.getElementById('newTeamForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!currentUser) return;
+  const input = document.getElementById('newTeamName');
+  const name = input.value.trim();
+  const status = document.getElementById('newTeamStatus');
+  if (!name) return;
+  status.classList.remove('is-error'); status.textContent = 'Creating team workspace…';
+  const { data: team, error: teamError } = await supabase.from('teams').insert({ name, created_by: currentUser.id }).select('id,name').single();
+  if (teamError) { status.textContent = teamError.message; status.classList.add('is-error'); return; }
+  const { error: membershipError } = await supabase.from('team_members').insert({ team_id: team.id, user_id: currentUser.id, role: 'coach' });
+  if (membershipError) { status.textContent = membershipError.message; status.classList.add('is-error'); return; }
+  localStorage.setItem(`touchline-active-team-${currentUser.id}`, team.id);
+  input.value = ''; status.textContent = `${name} is ready for its roster.`; await loadTeamWorkspace();
+});
 
 teamForm.addEventListener('submit', async event => {
   event.preventDefault();
@@ -681,8 +758,9 @@ teamForm.addEventListener('submit', async event => {
   const players = roster.map(([shirtNumber, playerName, position = null]) => ({ team_id: team.id, shirt_number: Number(shirtNumber), name: playerName, position }));
   const { error: playerError } = await supabase.from('players').insert(players);
   if (playerError) { teamStatus.textContent = playerError.message; teamStatus.classList.add('is-error'); return; }
+  localStorage.setItem(`touchline-active-team-${currentUser.id}`, team.id);
   currentTeam = team; hasTeamMembership = true; teamOnboarding.hidden = true;
-  await loadTeamData();
+  await loadTeamWorkspace();
 });
 
 document.getElementById('teamSettingsForm').addEventListener('submit', async event => {
