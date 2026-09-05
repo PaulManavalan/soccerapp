@@ -30,6 +30,12 @@ Deno.serve(async request => {
   if (!workerUrl || !workerSecret) return Response.json({ error: 'Vision worker is not configured yet' }, { status: 503, headers: corsHeaders });
 
   const admin = createClient(supabaseUrl, serviceRoleKey);
+  const { data: roster, error: rosterError } = await admin
+    .from('players')
+    .select('id,name,shirt_number,position')
+    .eq('team_id', job.team_id)
+    .order('shirt_number');
+  if (rosterError) return Response.json({ error: 'Unable to prepare the team roster' }, { status: 500, headers: corsHeaders });
   const { data: signed, error: signedError } = await admin.storage.from('duel-clips').createSignedUrl(job.storage_path, 900);
   if (signedError || !signed) return Response.json({ error: 'Unable to prepare the private clip' }, { status: 500, headers: corsHeaders });
 
@@ -41,6 +47,12 @@ Deno.serve(async request => {
       teamId: job.team_id,
       matchId: job.match_id,
       clipUrl: signed.signedUrl,
+      roster: (roster || []).map(player => ({
+        id: player.id,
+        name: player.name,
+        shirtNumber: player.shirt_number,
+        position: player.position,
+      })),
       callbackUrl: `${supabaseUrl}/functions/v1/complete-duel-analysis`,
     }),
   });
