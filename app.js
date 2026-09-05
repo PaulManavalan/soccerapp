@@ -33,7 +33,6 @@ let currentMatch = null;
 let activeLineupIds = new Set();
 let matchEvents = [];
 let matchDuels = [];
-let duelClipJobs = [];
 let matchAppearances = [];
 let selectedManagerPlayerId = null;
 let matchClockInterval = null;
@@ -129,7 +128,7 @@ async function loadTeamData() {
   renderDuelPlayerOptions();
   renderEventPlayerOptions();
   updateMatchContext();
-  await Promise.all([loadMatchDuels(), loadMatchEvents(), loadPostGameMatches(), loadDuelClipWorkspace()]);
+  await Promise.all([loadMatchDuels(), loadMatchEvents(), loadPostGameMatches()]);
 }
 function updateMatchContext() {
   const teamName = currentTeam?.name || 'Summit FC';
@@ -630,34 +629,6 @@ async function loadMatchDuels() {
   renderDetail(selected);
   renderManagerView();
 }
-async function loadDuelClipWorkspace() {
-  const matchSelect = document.getElementById('duelClipMatch');
-  const jobsContainer = document.getElementById('duelClipJobs');
-  if (!currentTeam) {
-    matchSelect.innerHTML = '<option value="">Choose match</option>';
-    jobsContainer.innerHTML = '<p class="empty-lineup">Create a team and match before uploading clips.</p>';
-    return;
-  }
-  const [matchesResult, jobsResult] = await Promise.all([
-    supabase.from('matches').select('id,opponent_name,started_at,status').eq('team_id', currentTeam.id).order('started_at', { ascending: false }),
-    supabase.from('duel_clip_jobs').select('id,match_id,original_filename,status,created_at,suggested_player_id,suggested_type,suggested_outcome,confidence').eq('team_id', currentTeam.id).order('created_at', { ascending: false }).limit(8),
-  ]);
-  const matches = matchesResult.data ?? [];
-  matchSelect.innerHTML = matches.length
-    ? `<option value="">Choose match</option>${matches.map(match => `<option value="${match.id}" ${match.id === currentMatch?.id ? 'selected' : ''}>vs. ${escapeHtml(match.opponent_name)} · ${new Date(match.started_at).toLocaleDateString()}</option>`).join('')}`
-    : '<option value="">Create a match first</option>';
-  matchSelect.disabled = !matches.length;
-  duelClipJobs = jobsResult.error ? [] : (jobsResult.data ?? []);
-  if (jobsResult.error) {
-    jobsContainer.innerHTML = '<p class="empty-lineup">Run the clip-analysis database setup before uploading clips.</p>';
-    return;
-  }
-  jobsContainer.innerHTML = duelClipJobs.length ? duelClipJobs.map(job => {
-    const statusLabel = job.status === 'complete' ? 'Suggestion ready' : job.status === 'failed' ? 'Needs attention' : job.status === 'analyzing' ? 'Analyzing clip' : 'Queued for analysis';
-    const suggestion = job.status === 'complete' ? `${job.suggested_type || 'Duel'} · ${job.suggested_outcome || 'review'}${job.confidence ? ` · ${job.confidence}%` : ''}` : 'Video is private to your team.';
-    return `<div class="clip-job"><div><strong>${escapeHtml(job.original_filename)}</strong><small>${escapeHtml(suggestion)}</small></div><span class="status ${job.status === 'complete' ? 'good' : job.status === 'failed' ? 'watch' : ''}">${statusLabel}</span></div>`;
-  }).join('') : '<p class="empty-lineup">No uploaded clips yet.</p>';
-}
 async function initialiseAuth() {
   const { data, error } = await supabase.auth.getSession();
   if (error) setAuthStatus('Unable to connect to the sign-in service. Please try again.', true);
@@ -867,41 +838,6 @@ document.getElementById('duelLogForm').addEventListener('submit', async event =>
   const marker = createMarkerFromDuel({ ...duel, zone: zone.label }, player);
   matchDuels.push(duel);
   marker.dataset.zone = zone.label; status.textContent = `Duel added at ${timeLabel(payload.occurred_at_seconds)}.`; event.target.reset(); updateTotal(); renderDetail(marker); filterMarkers(); await syncPlayerMatchStats(); renderManagerView();
-});
-
-document.getElementById('duelClipForm').addEventListener('submit', async event => {
-  event.preventDefault();
-  const status = document.getElementById('duelClipStatus');
-  const matchId = document.getElementById('duelClipMatch').value;
-  const file = document.getElementById('duelClipFile').files[0];
-  const note = document.getElementById('duelClipNote').value.trim() || null;
-  if (!currentUser || !currentTeam || !matchId || !file) return;
-  if (!file.type.startsWith('video/')) { status.textContent = 'Choose a video file.'; status.classList.add('is-error'); return; }
-  if (file.size > 50 * 1024 * 1024) { status.textContent = 'Keep MVP clips to 50 MB or less.'; status.classList.add('is-error'); return; }
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
-  const storagePath = `${currentTeam.id}/${currentUser.id}/${crypto.randomUUID()}-${safeName}`;
-  status.classList.remove('is-error'); status.textContent = 'Uploading private clip…';
-  const { error: uploadError } = await supabase.storage.from('duel-clips').upload(storagePath, file, { contentType: file.type, upsert: false });
-  if (uploadError) { status.textContent = uploadError.message; status.classList.add('is-error'); return; }
-  status.textContent = 'Adding clip to analysis queue…';
-  const { data: job, error: jobError } = await supabase.from('duel_clip_jobs').insert({
-    team_id: currentTeam.id,
-    match_id: matchId,
-    uploaded_by: currentUser.id,
-    storage_path: storagePath,
-    original_filename: file.name,
-    mime_type: file.type,
-    coach_note: note,
-    status: 'queued',
-  }).select('id').single();
-  if (jobError) {
-    await supabase.storage.from('duel-clips').remove([storagePath]);
-    status.textContent = jobError.message; status.classList.add('is-error'); return;
-  }
-  event.target.reset();
-  const { error: startError } = await supabase.functions.invoke('start-duel-analysis', { body: { jobId: job.id } });
-  status.textContent = startError ? 'Clip queued. It will start automatically once the vision worker is deployed.' : 'Clip uploaded and analysis started.';
-  await loadDuelClipWorkspace();
 });
 
 document.getElementById('eventLogForm').addEventListener('submit', async event => {
