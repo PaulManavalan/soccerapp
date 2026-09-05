@@ -1,0 +1,10 @@
+project_id = "cjhujsihefxrmkqllpcq"
+
+[functions.start-duel-analysis]
+verify_jwt = true
+
+[functions.complete-duel-analysis]
+verify_jwt = false
+
+[functions.invite-coach]
+verify_jwt = true

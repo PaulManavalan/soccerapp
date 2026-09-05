@@ -31,6 +31,8 @@ The clip uploader writes a private file and a `duel_clip_jobs` queue row. The in
 
 Set these two Edge Function secrets before deploying: `DUEL_ANALYSIS_WORKER_URL` (the worker's HTTPS endpoint) and `DUEL_ANALYSIS_WORKER_SECRET` (a long random value shared only with the worker). The worker receives `jobId`, `teamId`, `matchId`, a temporary `clipUrl`, and a `callbackUrl`. It must POST this shape to the callback with the `X-Worker-Secret` header:
 
+`supabase/config.toml` is included so `start-duel-analysis` requires a signed-in coach while `complete-duel-analysis` accepts only the separately authenticated worker callback. Do not make the callback function public without its shared secret.
+
 ```json
 {
   "jobId": "uuid",
