@@ -18,9 +18,10 @@ Open `index.html` in a browser to view the frontend prototype.
 8. Then run `supabase/migrations/20260904_allow_creator_membership_retry.sql` to make interrupted team setup safe to retry.
 9. Then run `supabase/migrations/20260905_team_creator_access.sql` so the coach who creates a team can use it immediately; adding a roster is handled later in Settings.
 10. Then run `supabase/migrations/20260906_duel_clip_queue.sql` to create the private video bucket and the clip-analysis queue. It supports uploads; a vision worker is configured separately.
-11. In **Project Settings → API Keys**, copy the Project URL and **Publishable key** (not the secret/service-role key).
-12. Copy `supabase.config.example.js` to `supabase.config.js`, add the two values. Only the publishable key belongs in browser code.
-13. In **Authentication → Providers → Email**, keep Email enabled. For password sign-up without needing a confirmation email during testing, turn off **Confirm email**. Turn it back on and configure a reliable custom SMTP sender before inviting a real coaching staff.
+11. Then run `supabase/migrations/20260907_allow_duel_clip_removal.sql` to allow coaches to remove a queued or completed private clip.
+12. In **Project Settings → API Keys**, copy the Project URL and **Publishable key** (not the secret/service-role key).
+13. Copy `supabase.config.example.js` to `supabase.config.js`, add the two values. Only the publishable key belongs in browser code.
+14. In **Authentication → Providers → Email**, keep Email enabled. For password sign-up without needing a confirmation email during testing, turn off **Confirm email**. Turn it back on and configure a reliable custom SMTP sender before inviting a real coaching staff.
 
 ## Duel clip automation handoff
 
