@@ -40,6 +40,7 @@ class AnalysisRequest(BaseModel):
     clipUrl: HttpUrl
     callbackUrl: HttpUrl
     roster: list[RosterPlayer] = Field(default_factory=list)
+    calibration: dict | None = None
 
 
 def secret_is_valid(supplied: str | None) -> bool:
@@ -111,7 +112,7 @@ Outcome rules: ground = won only when the coach's team retains possession; aeria
 Roster: {roster_text}
 
 Return JSON only, with this exact shape:
-{{"playerId":"roster UUID or null","duelType":"ground or aerial","outcome":"won or lost","confidence":0,"occurredAtSeconds":0,"pitchX":50,"pitchY":50,"note":"brief uncertainty-aware coaching explanation"}}
+{{"playerId":"roster UUID or null","duelType":"ground or aerial","outcome":"won or lost","confidence":0,"occurredAtSeconds":0,"frameX":50,"frameY":50,"pitchX":50,"pitchY":50,"note":"brief uncertainty-aware coaching explanation"}}
 pitchX and pitchY are percentages; use 50 when field location cannot be inferred. Confidence must be 0-100 and should be below 60 when the footage is unclear."""
 
 
@@ -166,6 +167,21 @@ def assess_frames(frames: list[Path], roster: list[RosterPlayer]) -> dict:
     raise RuntimeError("ANALYSIS_PROVIDER must be 'ollama' or 'openai'")
 
 
+def apply_calibration(result: dict, calibration: dict | None) -> dict:
+    if not calibration or not isinstance(calibration.get("frame_corners"), list) or len(calibration["frame_corners"]) != 4:
+        return result
+    corners = calibration["frame_corners"]
+    try:
+        xs, ys = [float(point["x"]) for point in corners], [float(point["y"]) for point in corners]
+        x = (float(result.get("frameX", 50)) - min(xs)) / max(1, max(xs) - min(xs)) * 100
+        y = (float(result.get("frameY", 50)) - min(ys)) / max(1, max(ys) - min(ys)) * 100
+        result["pitchX"] = max(0, min(100, x))
+        result["pitchY"] = max(0, min(100, y if calibration.get("attack_direction") == "top" else 100 - y))
+    except (KeyError, TypeError, ValueError):
+        pass
+    return result
+
+
 async def send_callback(request: AnalysisRequest, result: dict) -> None:
     secret = os.environ["DUEL_ANALYSIS_WORKER_SECRET"]
     payload = {"jobId": request.jobId, "status": "complete", **result}
@@ -199,7 +215,7 @@ async def analyze(request: AnalysisRequest, x_worker_secret: str | None = Header
             frames_dir.mkdir()
             await download_clip(str(request.clipUrl), video_path)
             frames = await asyncio.to_thread(extract_frames, video_path, frames_dir)
-            result = await asyncio.to_thread(assess_frames, frames, request.roster)
+            result = apply_calibration(await asyncio.to_thread(assess_frames, frames, request.roster), request.calibration)
             await send_callback(request, result)
         return {"accepted": True, "jobId": request.jobId}
     except Exception as error:

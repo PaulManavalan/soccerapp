@@ -42,6 +42,9 @@ let selectedReportMatchId = null;
 let pickingDuelLocation = false;
 let duelMatches = [];
 let selectedDuelMatchId = null;
+let cameraCalibration = null;
+let calibrationImage = null;
+let calibrationPoints = [];
 let availableTeams = [];
 let authMode = 'sign-in';
 
@@ -107,6 +110,7 @@ async function loadTeamData() {
   const { data: players, error: playersError } = await supabase.from('players').select('id,name,shirt_number,position').eq('team_id', currentTeam.id).order('shirt_number');
   if (playersError) return;
   roster = players ?? [];
+  await loadCameraCalibration();
   let { data: match, error: matchError } = await supabase.from('matches').select('id,opponent_name,started_at,status,clock_elapsed_seconds,clock_running,clock_started_at,ended_at,team_score,opponent_score').eq('team_id', currentTeam.id).in('status', ['live', 'scheduled']).order('started_at', { ascending: false }).limit(1).maybeSingle();
   if (matchError) {
     const { data: legacyMatch } = await supabase.from('matches').select('id,opponent_name,started_at,status').eq('team_id', currentTeam.id).in('status', ['live', 'scheduled']).order('started_at', { ascending: false }).limit(1).maybeSingle();
@@ -143,6 +147,33 @@ async function loadDuelMatchOptions() {
   if (!duelMatches.some(match => match.id === selectedDuelMatchId)) selectedDuelMatchId = currentMatch?.id || duelMatches[0]?.id || null;
   select.innerHTML = duelMatches.length ? duelMatches.map(match => `<option value="${match.id}" ${match.id === selectedDuelMatchId ? 'selected' : ''}>vs. ${escapeHtml(match.opponent_name)} · ${new Date(match.started_at).toLocaleDateString()}</option>`).join('') : '<option value="">No matches yet</option>';
   select.disabled = !duelMatches.length;
+}
+async function loadCameraCalibration() {
+  const status = document.getElementById('cameraCalibrationStatus');
+  if (!currentTeam) return;
+  const { data, error } = await supabase.from('team_camera_calibrations').select('attack_direction,frame_corners,updated_at').eq('team_id', currentTeam.id).maybeSingle();
+  cameraCalibration = error ? null : data;
+  if (error) { status.textContent = 'Run the camera-calibration database setup to enable this.'; return; }
+  if (!data) { status.textContent = 'No calibration saved yet.'; return; }
+  document.getElementById('cameraAttackDirection').value = data.attack_direction;
+  status.textContent = `Calibration saved ${new Date(data.updated_at).toLocaleDateString()}. Upload a new reference still to replace it.`;
+}
+function drawCalibrationCanvas() {
+  const canvas = document.getElementById('cameraCalibrationCanvas');
+  if (!calibrationImage) return;
+  const ratio = Math.min(1, 1280 / calibrationImage.naturalWidth);
+  canvas.width = Math.round(calibrationImage.naturalWidth * ratio);
+  canvas.height = Math.round(calibrationImage.naturalHeight * ratio);
+  const context = canvas.getContext('2d');
+  context.drawImage(calibrationImage, 0, 0, canvas.width, canvas.height);
+  calibrationPoints.forEach((point, index) => {
+    const x = canvas.width * point.x / 100, y = canvas.height * point.y / 100;
+    context.beginPath(); context.arc(x, y, 8, 0, Math.PI * 2); context.fillStyle = '#c9f23c'; context.fill();
+    context.fillStyle = '#10291f'; context.font = 'bold 11px sans-serif'; context.textAlign = 'center'; context.textBaseline = 'middle'; context.fillText(String(index + 1), x, y + 1);
+  });
+  const prompts = ['Tap the upper-left field corner.', 'Tap the upper-right field corner.', 'Tap the lower-right field corner.', 'Tap the lower-left field corner.', 'Four corners selected. Save calibration.'];
+  document.getElementById('cameraCalibrationPrompt').textContent = prompts[calibrationPoints.length];
+  document.getElementById('saveCameraCalibration').disabled = calibrationPoints.length !== 4;
 }
 function updateMatchContext() {
   const teamName = currentTeam?.name || 'Summit FC';
@@ -878,6 +909,42 @@ document.getElementById('bulkRosterForm').addEventListener('submit', async event
   const { error } = await supabase.from('players').insert(players);
   if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
   input.value = ''; status.textContent = `${players.length} players added.`; await loadTeamData();
+});
+
+document.getElementById('cameraReference').addEventListener('change', event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.addEventListener('load', () => {
+    calibrationImage = new Image();
+    calibrationImage.addEventListener('load', () => {
+      calibrationPoints = [];
+      document.getElementById('cameraCalibrationWorkspace').hidden = false;
+      drawCalibrationCanvas();
+    });
+    calibrationImage.src = reader.result;
+  });
+  reader.readAsDataURL(file);
+});
+document.getElementById('cameraCalibrationCanvas').addEventListener('click', event => {
+  if (!calibrationImage || calibrationPoints.length >= 4) return;
+  const canvas = event.currentTarget;
+  const bounds = canvas.getBoundingClientRect();
+  calibrationPoints.push({
+    x: Math.max(0, Math.min(100, ((event.clientX - bounds.left) / bounds.width) * 100)),
+    y: Math.max(0, Math.min(100, ((event.clientY - bounds.top) / bounds.height) * 100)),
+  });
+  drawCalibrationCanvas();
+});
+document.getElementById('resetCameraCalibration').addEventListener('click', () => { calibrationPoints = []; drawCalibrationCanvas(); });
+document.getElementById('saveCameraCalibration').addEventListener('click', async () => {
+  if (!currentTeam || calibrationPoints.length !== 4) return;
+  const status = document.getElementById('cameraCalibrationStatus');
+  const attackDirection = document.getElementById('cameraAttackDirection').value;
+  status.classList.remove('is-error'); status.textContent = 'Saving camera calibration…';
+  const { data, error } = await supabase.from('team_camera_calibrations').upsert({ team_id: currentTeam.id, attack_direction: attackDirection, frame_corners: calibrationPoints, updated_at: new Date().toISOString() }, { onConflict: 'team_id' }).select('attack_direction,frame_corners,updated_at').single();
+  if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
+  cameraCalibration = data; status.textContent = 'Calibration saved. New clip analyses will use this camera reference.';
 });
 
 document.getElementById('matchKickoff').value = new Date().toISOString().slice(0, 16);

@@ -72,12 +72,18 @@ async def roster_for_team(client: httpx.AsyncClient, url: str, key: str, team_id
     response.raise_for_status()
     return [RosterPlayer(id=item["id"], name=item["name"], shirtNumber=item.get("shirt_number"), position=item.get("position")) for item in response.json()]
 
+async def calibration_for_team(client: httpx.AsyncClient, url: str, key: str, team_id: str) -> dict | None:
+    response = await client.get(f"{url}/rest/v1/team_camera_calibrations", params={"select": "attack_direction,frame_corners", "team_id": f"eq.{team_id}"}, headers=headers(key))
+    if not response.is_success: return None
+    rows = response.json()
+    return rows[0] if rows else None
+
 
 async def process_job(client: httpx.AsyncClient, url: str, key: str, callback: str, job: dict) -> None:
     request = AnalysisRequest(
         jobId=job["id"], teamId=job["team_id"], matchId=job["match_id"],
         clipUrl=await signed_clip_url(client, url, key, job["storage_path"]), callbackUrl=callback,
-        roster=await roster_for_team(client, url, key, job["team_id"]),
+        roster=await roster_for_team(client, url, key, job["team_id"]), calibration=await calibration_for_team(client, url, key, job["team_id"]),
     )
     try:
         with tempfile.TemporaryDirectory() as temp_dir:

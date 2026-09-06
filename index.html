@@ -10,8 +10,44 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<section id="authGate" class="auth-gate" aria-labelledby="authTitle"><div class="auth-card"><a class="brand" href="#"><span class="brand-mark">T</span>touchline</a><p class="eyebrow">Coach access</p><h1 id="authTitle">Sign in to your team</h1><p id="authIntro">Use your coach email and password to access your team.</p><form id="authForm"><label id="authEmailLabel" for="authEmail">Coach email</label><input id="authEmail" type="email" autocomplete="email" placeholder="coach@school.edu" required><label id="authPasswordLabel" for="authPassword">Password</label><input id="authPassword" type="password" autocomplete="current-password" minlength="8" placeholder="At least 8 characters" required><button id="authSubmit" type="submit">Sign in <span>→</span></button></form><button id="authModeToggle" class="auth-link" type="button">New coach? Create an account</button><button id="authResetButton" class="auth-link" type="button">Forgot password?</button><p id="authStatus" class="auth-status" role="status">Your match data stays private to your coaching staff.</p></div></section>
-<section id="teamOnboarding" class="auth-gate" aria-labelledby="teamTitle" hidden><div class="auth-card"><a class="brand" href="#"><span class="brand-mark">T</span>touchline</a><p class="eyebrow">First-time setup</p><h1 id="teamTitle">Name your team</h1><p>Start with the team workspace. You can add players later in Settings &amp; roster.</p><form id="teamForm"><label for="teamName">Team name</label><input id="teamName" type="text" value="Summit FC" required><small>No roster is needed to get started.</small><button type="submit">Create team workspace <span>→</span></button></form><p id="teamStatus" class="auth-status" role="status"></p></div></section>
+<section id="authGate" class="auth-gate" aria-labelledby="authTitle">
+<div class="auth-card">
+<a class="brand" href="#">
+<span class="brand-mark">T</span>touchline</a>
+<p class="eyebrow">Coach access</p>
+<h1 id="authTitle">Sign in to your team</h1>
+<p id="authIntro">Use your coach email and password to access your team.</p>
+<form id="authForm">
+<label id="authEmailLabel" for="authEmail">Coach email</label>
+<input id="authEmail" type="email" autocomplete="email" placeholder="coach@school.edu" required>
+<label id="authPasswordLabel" for="authPassword">Password</label>
+<input id="authPassword" type="password" autocomplete="current-password" minlength="8" placeholder="At least 8 characters" required>
+<button id="authSubmit" type="submit">Sign in <span>→</span>
+</button>
+</form>
+<button id="authModeToggle" class="auth-link" type="button">New coach? Create an account</button>
+<button id="authResetButton" class="auth-link" type="button">Forgot password?</button>
+<p id="authStatus" class="auth-status" role="status">Your match data stays private to your coaching staff.</p>
+</div>
+</section>
+<section id="teamOnboarding" class="auth-gate" aria-labelledby="teamTitle" hidden>
+<div class="auth-card">
+<a class="brand" href="#">
+<span class="brand-mark">T</span>touchline</a>
+<p class="eyebrow">First-time setup</p>
+<h1 id="teamTitle">Name your team</h1>
+<p>Start with the team workspace. You can add players later in Settings &amp; roster.</p>
+<form id="teamForm">
+<label for="teamName">Team name</label>
+<input id="teamName" type="text" value="Summit FC" required>
+<small>No roster is needed to get started.</small>
+<button type="submit">Create team workspace <span>→</span>
+</button>
+</form>
+<p id="teamStatus" class="auth-status" role="status">
+</p>
+</div>
+</section>
 <div class="app-shell">
 <aside class="sidebar">
 <a class="brand" href="#">
@@ -32,7 +68,9 @@
 <strong data-team-name>Summit FC</strong>
 <small>Men's First Team</small>
 </div>
-<select id="teamSwitcher" class="team-switcher" aria-label="Switch team"><option>Loading teams…</option></select>
+<select id="teamSwitcher" class="team-switcher" aria-label="Switch team">
+<option>Loading teams…</option>
+</select>
 </div>
 <a class="profile" href="#profile">
 <span class="avatar">JD</span>
@@ -84,7 +122,9 @@
 <b id="teamScore">0</b>
 <em>—</em>
 <b id="opponentScore">0</b>
-<small><span id="liveMatchClock">00:00</span> · <span id="liveMatchState">Not started</span></small>
+<small>
+<span id="liveMatchClock">00:00</span> · <span id="liveMatchState">Not started</span>
+</small>
 </div>
 <div class="team away">
 <div class="team-crest harbor">H</div>
@@ -94,7 +134,29 @@
 <button class="match-button">Open match center <span>→</span>
 </button>
 </section>
-<section class="match-operations"><div><p class="eyebrow">Match operations</p><h2 id="operationsTitle">No active match</h2><p id="operationsDetail">Create a match and choose your matchday squad to begin.</p></div><div class="clock-control"><strong id="operationsClock">00:00</strong><span id="operationsStatus" class="status watch">Not started</span></div><div class="operation-actions"><button id="startMatchButton" type="button">Start match</button><button id="pauseMatchButton" type="button">Pause</button><button id="finishMatchButton" type="button">Finish match</button></div><form id="scoreForm" class="score-control"><label>Us<input id="teamScoreInput" type="number" min="0" max="99" value="0"></label><label>Opp.<input id="opponentScoreInput" type="number" min="0" max="99" value="0"></label><button type="submit">Save score</button></form></section>
+<section class="match-operations">
+<div>
+<p class="eyebrow">Match operations</p>
+<h2 id="operationsTitle">No active match</h2>
+<p id="operationsDetail">Create a match and choose your matchday squad to begin.</p>
+</div>
+<div class="clock-control">
+<strong id="operationsClock">00:00</strong>
+<span id="operationsStatus" class="status watch">Not started</span>
+</div>
+<div class="operation-actions">
+<button id="startMatchButton" type="button">Start match</button>
+<button id="pauseMatchButton" type="button">Pause</button>
+<button id="finishMatchButton" type="button">Finish match</button>
+</div>
+<form id="scoreForm" class="score-control">
+<label>Us<input id="teamScoreInput" type="number" min="0" max="99" value="0">
+</label>
+<label>Opp.<input id="opponentScoreInput" type="number" min="0" max="99" value="0">
+</label>
+<button type="submit">Save score</button>
+</form>
+</section>
 <section class="stats-grid">
 <article>
 <div class="stat-icon lime">◔</div>
@@ -108,7 +170,8 @@
 <div class="stat-icon blue">◎</div>
 <div>
 <p>Shots on target</p>
-<strong id="liveShots">0<span>/ 0</span></strong>
+<strong id="liveShots">0<span>/ 0</span>
+</strong>
 <small id="liveShotsDetail">On target / total shots</small>
 </div>
 </article>
@@ -130,10 +193,57 @@
 </article>
 </section>
 <section class="live-event-panel">
-<div><p class="eyebrow">Manual match tracking</p><h2>Log an event</h2><p>Every saved event updates player stats, the live summary, and the post-game report.</p></div>
-<form id="eventLogForm"><select id="eventLogPlayer" required><option value="">Select player</option></select><select id="eventLogType" required><option value="goal">Goal</option><option value="shot_on_target">Shot on target</option><option value="shot_off_target">Shot off target</option><option value="pass_complete">Completed pass</option><option value="pass_incomplete">Incomplete pass</option><option value="tackle_won">Tackle won</option><option value="tackle_lost">Tackle lost</option><option value="interception">Interception</option><option value="clearance">Clearance</option><option value="possession_won">Possession won</option><option value="possession_lost">Possession lost</option><option value="foul_committed">Foul committed</option><option value="foul_won">Foul won</option><option value="yellow_card">Yellow card</option><option value="red_card">Red card</option></select><select id="eventLogZone"><option value="central">Central third</option><option value="left-attacking">Left attacking third</option><option value="right-attacking">Right attacking third</option><option value="left-defensive">Left defensive third</option><option value="right-defensive">Right defensive third</option></select><input id="eventLogNotes" type="text" maxlength="240" placeholder="Optional note"><button type="submit">Log event</button></form><p id="eventLogStatus" class="auth-status" role="status"></p>
+<div>
+<p class="eyebrow">Manual match tracking</p>
+<h2>Log an event</h2>
+<p>Every saved event updates player stats, the live summary, and the post-game report.</p>
+</div>
+<form id="eventLogForm">
+<select id="eventLogPlayer" required>
+<option value="">Select player</option>
+</select>
+<select id="eventLogType" required>
+<option value="goal">Goal</option>
+<option value="shot_on_target">Shot on target</option>
+<option value="shot_off_target">Shot off target</option>
+<option value="pass_complete">Completed pass</option>
+<option value="pass_incomplete">Incomplete pass</option>
+<option value="tackle_won">Tackle won</option>
+<option value="tackle_lost">Tackle lost</option>
+<option value="interception">Interception</option>
+<option value="clearance">Clearance</option>
+<option value="possession_won">Possession won</option>
+<option value="possession_lost">Possession lost</option>
+<option value="foul_committed">Foul committed</option>
+<option value="foul_won">Foul won</option>
+<option value="yellow_card">Yellow card</option>
+<option value="red_card">Red card</option>
+</select>
+<select id="eventLogZone">
+<option value="central">Central third</option>
+<option value="left-attacking">Left attacking third</option>
+<option value="right-attacking">Right attacking third</option>
+<option value="left-defensive">Left defensive third</option>
+<option value="right-defensive">Right defensive third</option>
+</select>
+<input id="eventLogNotes" type="text" maxlength="240" placeholder="Optional note">
+<button type="submit">Log event</button>
+</form>
+<p id="eventLogStatus" class="auth-status" role="status">
+</p>
 </section>
-<section class="panel event-timeline-panel"><div class="panel-heading"><div><p class="eyebrow">Current match</p><h2>Event timeline</h2></div><span id="eventCount" class="status watch">0 events</span></div><div id="eventTimeline" class="event-timeline"><p class="empty-lineup">No events logged yet.</p></div></section>
+<section class="panel event-timeline-panel">
+<div class="panel-heading">
+<div>
+<p class="eyebrow">Current match</p>
+<h2>Event timeline</h2>
+</div>
+<span id="eventCount" class="status watch">0 events</span>
+</div>
+<div id="eventTimeline" class="event-timeline">
+<p class="empty-lineup">No events logged yet.</p>
+</div>
+</section>
 <section class="content-grid">
 <article class="panel heatmap-panel">
 <div class="panel-heading">
@@ -208,7 +318,9 @@
 <h2 id="analysisScore">Choose a completed match</h2>
 <p id="analysisMeta">Finalized match data will appear here.</p>
 </div>
-<select id="analysisMatchSelect" class="analysis-match-select"><option value="">No completed matches</option></select>
+<select id="analysisMatchSelect" class="analysis-match-select">
+<option value="">No completed matches</option>
+</select>
 </div>
 <section class="report-score">
 <article>
@@ -236,7 +348,8 @@
 </div>
 <span id="analysisStrengthCount" class="status good">0 trends</span>
 </div>
-<div id="analysisStrengths"></div>
+<div id="analysisStrengths">
+</div>
 </article>
 <article class="panel">
 <div class="panel-heading">
@@ -246,7 +359,8 @@
 </div>
 <span id="analysisFocusCount" class="status watch">0 focus areas</span>
 </div>
-<div id="analysisFocus"></div>
+<div id="analysisFocus">
+</div>
 </article>
 </section>
 <section class="panel action-plan">
@@ -255,7 +369,8 @@
 <h2 id="analysisPlanTitle">Suggested focus: log more match data</h2>
 <p id="analysisPlanText">Complete a match with events and duels to generate a targeted training recommendation.</p>
 </div>
-<button class="plan-button" type="button">Build session <span>→</span></button>
+<button class="plan-button" type="button">Build session <span>→</span>
+</button>
 </section>
 </section>
 <section class="tab-view" id="manager">
@@ -263,7 +378,8 @@
 <div>
 <p class="eyebrow">Matchday squad</p>
 <h2 data-active-match-title>Summit FC vs. Harbor City</h2>
-<p>Live · <span id="managerMatchClock">00:00</span> · <span id="managerScore">0–0</span></p>
+<p>Live · <span id="managerMatchClock">00:00</span> · <span id="managerScore">0–0</span>
+</p>
 </div>
 <button class="match-button">Make a substitution <span>+</span>
 </button>
@@ -410,7 +526,53 @@
 </article>
 </section>
 </section>
-<section class="tab-view" id="match"><section class="match-setup-hero"><div><p class="eyebrow">Matchday setup</p><h2>Create your active match</h2><p>Choose the opponent and active lineup before tracking duels and in-game events.</p></div><span id="matchState" class="status watch">No active match</span></section><section class="match-setup-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Match details</p><h2>Game information</h2></div></div><form id="matchForm" class="match-form"><label>Opponent<input id="matchOpponent" type="text" placeholder="Harbor City" required></label><label>Kickoff<input id="matchKickoff" type="datetime-local" required></label><label>Match status<select id="matchStatus"><option value="scheduled">Scheduled</option><option value="live">Live now</option></select></label><button type="submit">Create match <span>→</span></button><p id="matchFormStatus" class="auth-status" role="status"></p></form></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Matchday squad</p><h2>Select active lineup</h2></div><span id="lineupCount" class="status good">0 selected</span></div><div id="lineupPicker" class="lineup-picker"><p class="empty-lineup">Your roster will appear here after team setup.</p></div></article></section></section>
+<section class="tab-view" id="match">
+<section class="match-setup-hero">
+<div>
+<p class="eyebrow">Matchday setup</p>
+<h2>Create your active match</h2>
+<p>Choose the opponent and active lineup before tracking duels and in-game events.</p>
+</div>
+<span id="matchState" class="status watch">No active match</span>
+</section>
+<section class="match-setup-grid">
+<article class="panel">
+<div class="panel-heading">
+<div>
+<p class="eyebrow">Match details</p>
+<h2>Game information</h2>
+</div>
+</div>
+<form id="matchForm" class="match-form">
+<label>Opponent<input id="matchOpponent" type="text" placeholder="Harbor City" required>
+</label>
+<label>Kickoff<input id="matchKickoff" type="datetime-local" required>
+</label>
+<label>Match status<select id="matchStatus">
+<option value="scheduled">Scheduled</option>
+<option value="live">Live now</option>
+</select>
+</label>
+<button type="submit">Create match <span>→</span>
+</button>
+<p id="matchFormStatus" class="auth-status" role="status">
+</p>
+</form>
+</article>
+<article class="panel">
+<div class="panel-heading">
+<div>
+<p class="eyebrow">Matchday squad</p>
+<h2>Select active lineup</h2>
+</div>
+<span id="lineupCount" class="status good">0 selected</span>
+</div>
+<div id="lineupPicker" class="lineup-picker">
+<p class="empty-lineup">Your roster will appear here after team setup.</p>
+</div>
+</article>
+</section>
+</section>
 <section class="tab-view" id="duels">
 <section class="duel-hero">
 <div>
@@ -425,10 +587,60 @@
 <small>61% · target 58%</small>
 </div>
 </section>
-<section class="duel-log-panel"><div><p class="eyebrow">Manual event entry</p><h2>Log a duel</h2></div><form id="duelLogForm"><select id="duelLogPlayer" required><option value="">Select player</option></select><select id="duelLogType"><option value="ground">Ground duel</option><option value="aerial">Aerial duel</option></select><select id="duelLogOutcome"><option value="won">Won</option><option value="lost">Lost</option></select><select id="duelLogZone"><option value="central">Central third</option><option value="left-attacking">Left attacking third</option><option value="right-defensive">Right defensive third</option><option value="left-defensive">Left defensive third</option><option value="right-attacking">Right attacking third</option></select><button type="submit">Add duel</button></form><p id="duelLogStatus" class="auth-status" role="status"></p></section>
-<section class="clip-upload-panel"><div><p class="eyebrow">Video analysis · MVP</p><h2>Upload a duel clip</h2><p>Upload a short clip (up to 50 MB). It is stored privately and queued for analysis.</p></div><form id="duelClipForm"><select id="duelClipMatch" required><option value="">Choose match</option></select><input id="duelClipFile" type="file" accept="video/mp4,video/quicktime,video/webm" required><input id="duelClipNote" type="text" maxlength="160" placeholder="Optional: what should we look at?"><button type="submit">Queue analysis</button></form><p id="duelClipStatus" class="auth-status" role="status"></p><div id="duelClipJobs" class="clip-job-list"><p class="empty-lineup">No uploaded clips yet.</p></div></section>
+<section class="duel-log-panel">
+<div>
+<p class="eyebrow">Manual event entry</p>
+<h2>Log a duel</h2>
+</div>
+<form id="duelLogForm">
+<select id="duelLogPlayer" required>
+<option value="">Select player</option>
+</select>
+<select id="duelLogType">
+<option value="ground">Ground duel</option>
+<option value="aerial">Aerial duel</option>
+</select>
+<select id="duelLogOutcome">
+<option value="won">Won</option>
+<option value="lost">Lost</option>
+</select>
+<select id="duelLogZone">
+<option value="central">Central third</option>
+<option value="left-attacking">Left attacking third</option>
+<option value="right-defensive">Right defensive third</option>
+<option value="left-defensive">Left defensive third</option>
+<option value="right-attacking">Right attacking third</option>
+</select>
+<button type="submit">Add duel</button>
+</form>
+<p id="duelLogStatus" class="auth-status" role="status">
+</p>
+</section>
+<section class="clip-upload-panel">
+<div>
+<p class="eyebrow">Video analysis · MVP</p>
+<h2>Upload a duel clip</h2>
+<p>Upload a short clip (up to 50 MB). It is stored privately and queued for analysis.</p>
+</div>
+<form id="duelClipForm">
+<select id="duelClipMatch" required>
+<option value="">Choose match</option>
+</select>
+<input id="duelClipFile" type="file" accept="video/mp4,video/quicktime,video/webm" required>
+<input id="duelClipNote" type="text" maxlength="160" placeholder="Optional: what should we look at?">
+<button type="submit">Queue analysis</button>
+</form>
+<p id="duelClipStatus" class="auth-status" role="status">
+</p>
+<div id="duelClipJobs" class="clip-job-list">
+<p class="empty-lineup">No uploaded clips yet.</p>
+</div>
+</section>
 <section class="duel-filter-bar">
-<label>Match<select id="duelMatch"><option value="">Choose match</option></select></label>
+<label>Match<select id="duelMatch">
+<option value="">Choose match</option>
+</select>
+</label>
 <label>Player<select id="duelPlayer">
 <option value="all">All players</option>
 <option value="Noah Williams">Noah Williams</option>
@@ -542,10 +754,26 @@
 </div>
 <div id="correctionPanel" class="correction-panel" hidden>
 <p>Correct suggested event</p>
-<fieldset><legend>Outcome</legend><button type="button" data-correction="won">Won</button><button type="button" data-correction="lost">Lost</button></fieldset>
-<fieldset><legend>Type</legend><button type="button" data-correction-type="ground">Ground</button><button type="button" data-correction-type="aerial">Aerial</button></fieldset>
-<fieldset><legend>Player</legend><select id="correctDuelPlayer" aria-label="Correct duel player"></select><button type="button" id="saveDuelPlayer">Save player</button></fieldset>
-<fieldset><legend>Location</legend><button type="button" id="pickDuelLocation">Pick on pitch</button></fieldset>
+<fieldset>
+<legend>Outcome</legend>
+<button type="button" data-correction="won">Won</button>
+<button type="button" data-correction="lost">Lost</button>
+</fieldset>
+<fieldset>
+<legend>Type</legend>
+<button type="button" data-correction-type="ground">Ground</button>
+<button type="button" data-correction-type="aerial">Aerial</button>
+</fieldset>
+<fieldset>
+<legend>Player</legend>
+<select id="correctDuelPlayer" aria-label="Correct duel player">
+</select>
+<button type="button" id="saveDuelPlayer">Save player</button>
+</fieldset>
+<fieldset>
+<legend>Location</legend>
+<button type="button" id="pickDuelLocation">Pick on pitch</button>
+</fieldset>
 </div>
 <p id="reviewNote" class="review-note">Confirming this event updates the team and player duel totals.</p>
 </article>
@@ -560,9 +788,121 @@
 <button>View clips →</button>
 </section>
 </section>
-<section class="tab-view" id="settings"><section class="settings-hero"><div><p class="eyebrow">Team workspace</p><h2>Settings &amp; roster</h2><p>Manage your coach identity, teams, and the players available for future matchday lineups.</p></div></section><section class="settings-grid"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Coach account</p><h2>Your profile</h2></div></div><form id="coachProfileForm" class="settings-form"><label for="coachDisplayName">Display name</label><input id="coachDisplayName" type="text" maxlength="80" required><label>Signed-in email</label><input id="coachEmail" type="email" disabled><button type="submit">Save profile</button><p id="coachProfileStatus" class="auth-status" role="status"></p></form></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Club details</p><h2>Team name</h2></div></div><form id="teamSettingsForm" class="settings-form"><label for="settingsTeamName">Team name</label><input id="settingsTeamName" type="text" required><button type="submit">Save team name</button><p id="teamSettingsStatus" class="auth-status" role="status"></p></form><form id="newTeamForm" class="settings-form create-team-form"><label for="newTeamName">Create another team</label><input id="newTeamName" type="text" placeholder="e.g. Summit FC JV" required><button type="submit">Create team workspace</button><p id="newTeamStatus" class="auth-status" role="status"></p></form></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Coaching staff</p><h2>Invite a coach</h2></div></div><form id="inviteCoachForm" class="settings-form invite-coach-form"><label for="inviteCoachEmail">Coach email</label><input id="inviteCoachEmail" type="email" placeholder="assistant@school.edu" required><label for="inviteCoachRole">Access level</label><select id="inviteCoachRole"><option value="assistant_coach">Assistant coach</option><option value="coach">Head coach</option></select><button type="submit">Send invitation</button><p id="inviteCoachStatus" class="auth-status" role="status">Invitations require the Supabase Edge Function to be deployed.</p></form></article><article class="panel roster-panel"><div class="panel-heading"><div><p class="eyebrow">Add players</p><h2>Roster</h2></div></div><form id="bulkRosterForm" class="bulk-roster-form"><label for="bulkRosterInput">Paste one player per line: <b>number, name, position</b></label><textarea id="bulkRosterInput" rows="6" placeholder="0, Alex Rivera, GK&#10;4, Jordan Lee, CB&#10;10, Sam Carter, CM"></textarea><button type="submit">Add roster</button></form><p id="bulkRosterStatus" class="auth-status" role="status"></p><p class="bulk-roster-hint">You can also paste rows copied from a spreadsheet. Keep shirt numbers unique.</p><form id="playerForm" class="player-form"><input id="playerNumber" type="number" min="0" max="99" placeholder="#" required><input id="playerName" type="text" placeholder="Player name" required><input id="playerPosition" type="text" placeholder="Position"><button type="submit">Add player</button></form><p id="playerFormStatus" class="auth-status" role="status"></p><div id="rosterManager" class="roster-manager"><p class="empty-lineup">Your roster will appear here.</p></div></article></section></section>
+<section class="tab-view" id="settings">
+<section class="settings-hero">
+<div>
+<p class="eyebrow">Team workspace</p>
+<h2>Settings &amp; roster</h2>
+<p>Manage your coach identity, teams, and the players available for future matchday lineups.</p>
+</div>
+</section>
+<section class="settings-grid">
+<article class="panel">
+<div class="panel-heading">
+<div>
+<p class="eyebrow">Coach account</p>
+<h2>Your profile</h2>
+</div>
+</div>
+<form id="coachProfileForm" class="settings-form">
+<label for="coachDisplayName">Display name</label>
+<input id="coachDisplayName" type="text" maxlength="80" required>
+<label>Signed-in email</label>
+<input id="coachEmail" type="email" disabled>
+<button type="submit">Save profile</button>
+<p id="coachProfileStatus" class="auth-status" role="status">
+</p>
+</form>
+</article>
+<article class="panel">
+<div class="panel-heading">
+<div>
+<p class="eyebrow">Club details</p>
+<h2>Team name</h2>
+</div>
+</div>
+<form id="teamSettingsForm" class="settings-form">
+<label for="settingsTeamName">Team name</label>
+<input id="settingsTeamName" type="text" required>
+<button type="submit">Save team name</button>
+<p id="teamSettingsStatus" class="auth-status" role="status">
+</p>
+</form>
+<form id="newTeamForm" class="settings-form create-team-form">
+<label for="newTeamName">Create another team</label>
+<input id="newTeamName" type="text" placeholder="e.g. Summit FC JV" required>
+<button type="submit">Create team workspace</button>
+<p id="newTeamStatus" class="auth-status" role="status">
+</p>
+</form>
+</article>
+<article class="panel">
+<div class="panel-heading">
+<div>
+<p class="eyebrow">Coaching staff</p>
+<h2>Invite a coach</h2>
+</div>
+</div>
+<form id="inviteCoachForm" class="settings-form invite-coach-form">
+<label for="inviteCoachEmail">Coach email</label>
+<input id="inviteCoachEmail" type="email" placeholder="assistant@school.edu" required>
+<label for="inviteCoachRole">Access level</label>
+<select id="inviteCoachRole">
+<option value="assistant_coach">Assistant coach</option>
+<option value="coach">Head coach</option>
+</select>
+<button type="submit">Send invitation</button>
+<p id="inviteCoachStatus" class="auth-status" role="status">Invitations require the Supabase Edge Function to be deployed.</p>
+</form>
+</article>
+<article class="panel camera-calibration-panel">
+<div class="panel-heading"><div><p class="eyebrow">Video analysis</p><h2>Camera calibration</h2></div></div>
+<p class="camera-calibration-copy">For a fixed midfield camera, upload one still frame and tap the four visible field corners. This helps clip analysis map duels to the pitch.</p>
+<form id="cameraCalibrationForm" class="settings-form">
+<label for="cameraReference">Reference still<input id="cameraReference" type="file" accept="image/*"></label>
+<label for="cameraAttackDirection">Your team attacks toward<select id="cameraAttackDirection"><option value="top">Top of the reference image</option><option value="bottom">Bottom of the reference image</option></select></label>
+</form>
+<div id="cameraCalibrationWorkspace" class="camera-calibration-workspace" hidden>
+<p id="cameraCalibrationPrompt">Tap the upper-left field corner.</p>
+<canvas id="cameraCalibrationCanvas"></canvas>
+<div><button id="resetCameraCalibration" type="button">Reset points</button><button id="saveCameraCalibration" type="button" disabled>Save calibration</button></div>
+</div>
+<p id="cameraCalibrationStatus" class="auth-status" role="status">No calibration saved yet.</p>
+</article>
+<article class="panel roster-panel">
+<div class="panel-heading">
+<div>
+<p class="eyebrow">Add players</p>
+<h2>Roster</h2>
+</div>
+</div>
+<form id="bulkRosterForm" class="bulk-roster-form">
+<label for="bulkRosterInput">Paste one player per line: <b>number, name, position</b>
+</label>
+<textarea id="bulkRosterInput" rows="6" placeholder="0, Alex Rivera, GK&#10;4, Jordan Lee, CB&#10;10, Sam Carter, CM">
+</textarea>
+<button type="submit">Add roster</button>
+</form>
+<p id="bulkRosterStatus" class="auth-status" role="status">
+</p>
+<p class="bulk-roster-hint">You can also paste rows copied from a spreadsheet. Keep shirt numbers unique.</p>
+<form id="playerForm" class="player-form">
+<input id="playerNumber" type="number" min="0" max="99" placeholder="#" required>
+<input id="playerName" type="text" placeholder="Player name" required>
+<input id="playerPosition" type="text" placeholder="Position">
+<button type="submit">Add player</button>
+</form>
+<p id="playerFormStatus" class="auth-status" role="status">
+</p>
+<div id="rosterManager" class="roster-manager">
+<p class="empty-lineup">Your roster will appear here.</p>
+</div>
+</article>
+</section>
+</section>
 </main>
 </div>
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js">
+</script>
 </body>
 </html>

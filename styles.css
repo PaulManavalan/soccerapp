@@ -551,3 +551,4 @@ main{padding:22px 16px}
 .formation-player>span{width:28px;height:31px}
 
 }
+ .camera-calibration-panel{grid-column:1/-1}.camera-calibration-copy{font-size:10px;color:#718078;line-height:1.6;margin:0 0 12px}.camera-calibration-workspace{margin-top:12px}.camera-calibration-workspace p{font-size:10px;font-weight:700;color:#35654a}.camera-calibration-workspace canvas{display:block;width:min(100%,760px);max-height:430px;object-fit:contain;background:#10291f;border-radius:7px;cursor:crosshair}.camera-calibration-workspace div{display:flex;gap:7px;margin-top:8px}.camera-calibration-workspace button{border:1px solid #dbe5dd;background:#fff;color:#476154;border-radius:6px;padding:8px 10px;font:700 10px Manrope;cursor:pointer}.camera-calibration-workspace button:last-child{border:0;background:#357d51;color:#fff}.camera-calibration-workspace button:disabled{opacity:.5;cursor:not-allowed}
