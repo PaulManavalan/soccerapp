@@ -39,6 +39,7 @@ let selectedManagerPlayerId = null;
 let matchClockInterval = null;
 let completedMatches = [];
 let selectedReportMatchId = null;
+let pickingDuelLocation = false;
 let availableTeams = [];
 let authMode = 'sign-in';
 
@@ -586,13 +587,18 @@ async function syncPlayerMatchStats() {
 function timeLabel(totalSeconds) {
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }
+function locationLabel(x, y) {
+  const third = y < 34 ? 'Attacking third' : y > 66 ? 'Defensive third' : 'Central third';
+  const channel = x < 34 ? 'left' : x > 66 ? 'right' : 'central';
+  return channel === 'central' ? third : `${channel} ${third.toLowerCase()}`;
+}
 function attachDuelMarker(marker) { marker.addEventListener('click', () => renderDetail(marker)); }
 function createMarkerFromDuel(duel, player = null) {
   const marker = document.createElement('button');
   marker.type = 'button';
   marker.className = `duel-marker ${duel.outcome} ${duel.duel_type}`;
   marker.style.setProperty('--x', `${duel.pitch_x}%`); marker.style.setProperty('--y', `${duel.pitch_y}%`);
-  marker.dataset.duelId = duel.id; marker.dataset.player = player?.name || 'Unassigned player'; marker.dataset.number = player?.shirt_number || '–'; marker.dataset.time = timeLabel(duel.occurred_at_seconds); marker.dataset.zone = duel.zone || 'Field location'; marker.dataset.confidence = duel.confidence ?? 100; marker.dataset.outcome = duel.outcome; marker.dataset.initialOutcome = duel.suggested_outcome || duel.outcome; marker.dataset.type = duel.duel_type; marker.dataset.confirmed = duel.review_status === 'suggested' ? '' : 'true';
+  marker.dataset.duelId = duel.id; marker.dataset.player = player?.name || 'Unassigned player'; marker.dataset.number = player?.shirt_number || '–'; marker.dataset.time = timeLabel(duel.occurred_at_seconds); marker.dataset.zone = duel.zone || locationLabel(Number(duel.pitch_x), Number(duel.pitch_y)); marker.dataset.confidence = duel.confidence ?? 100; marker.dataset.outcome = duel.outcome; marker.dataset.initialOutcome = duel.suggested_outcome || duel.outcome; marker.dataset.type = duel.duel_type; marker.dataset.confirmed = duel.review_status === 'suggested' ? '' : 'true';
   marker.innerHTML = `<span>${marker.dataset.number}</span>`;
   document.querySelector('.duel-pitch').append(marker); markers.push(marker); attachDuelMarker(marker);
   return marker;
@@ -959,7 +965,26 @@ document.querySelector('.insight-card a[href="#tactics"]')?.addEventListener('cl
 document.querySelectorAll('.formation-player').forEach(player => player.addEventListener('click', () => { document.querySelectorAll('.formation-player').forEach(item => item.classList.remove('active')); player.classList.add('active'); const data = player.dataset; const card = document.getElementById('selectedPlayer'); card.querySelector('.selected-number').textContent = data.number; card.querySelector('.eyebrow').textContent = data.position; card.querySelector('h2').innerHTML = `${data.name} <span>${data.rating}</span>`; card.querySelector('small').textContent = `${data.minutes} minutes played`; document.getElementById('statMinutes').textContent = `${data.minutes}'`; document.getElementById('statPasses').textContent = data.passes; document.getElementById('statShots').textContent = data.shots; document.getElementById('statTackles').textContent = data.tackles; }));
 markers.forEach(marker => { applyStored(marker); attachDuelMarker(marker); }); filters.forEach(id => document.getElementById(id).addEventListener('change', filterMarkers));
 document.getElementById('confirmDuel').addEventListener('click', async () => { if (!selected) return; selected.dataset.confirmed = 'true'; await save(selected); renderDetail(selected); });
-document.getElementById('changeDuel').addEventListener('click', () => { const panel = document.getElementById('correctionPanel'); panel.hidden = !panel.hidden; });
+document.getElementById('changeDuel').addEventListener('click', () => { const panel = document.getElementById('correctionPanel'); panel.hidden = !panel.hidden; pickingDuelLocation = false; });
 document.querySelectorAll('[data-correction]').forEach(button => button.addEventListener('click', async () => { selected.dataset.outcome = button.dataset.correction; selected.dataset.confirmed = 'true'; selected.classList.toggle('won', selected.dataset.outcome === 'won'); selected.classList.toggle('lost', selected.dataset.outcome === 'lost'); await save(selected, 'corrected'); updateTotal(); filterMarkers(); renderDetail(selected); }));
 document.querySelectorAll('[data-correction-type]').forEach(button => button.addEventListener('click', async () => { selected.dataset.type = button.dataset.correctionType; selected.dataset.confirmed = 'true'; selected.classList.toggle('ground', selected.dataset.type === 'ground'); selected.classList.toggle('aerial', selected.dataset.type === 'aerial'); await save(selected, 'corrected'); filterMarkers(); renderDetail(selected); }));
+document.getElementById('pickDuelLocation').addEventListener('click', () => {
+  if (!selected) return;
+  pickingDuelLocation = true;
+  document.getElementById('reviewNote').textContent = 'Tap the correct spot on the pitch map to save this location.';
+  document.getElementById('correctionPanel').hidden = true;
+});
+document.querySelector('.duel-pitch').addEventListener('click', async event => {
+  if (!pickingDuelLocation || !selected) return;
+  const bounds = event.currentTarget.getBoundingClientRect();
+  const x = Math.max(0, Math.min(100, ((event.clientX - bounds.left) / bounds.width) * 100));
+  const y = Math.max(0, Math.min(100, ((event.clientY - bounds.top) / bounds.height) * 100));
+  selected.style.setProperty('--x', `${x}%`);
+  selected.style.setProperty('--y', `${y}%`);
+  selected.dataset.zone = locationLabel(x, y);
+  selected.dataset.confirmed = 'true';
+  pickingDuelLocation = false;
+  await save(selected, 'corrected');
+  renderDetail(selected);
+});
 updateTotal(); renderDetail(selected);
