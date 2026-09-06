@@ -1,15 +1,17 @@
 # Touchline duel-analysis worker
 
-This Cloud Run-ready worker receives a short, private Supabase clip URL, samples up to eight video frames with FFmpeg, calls a vision model, and posts a coach-reviewable suggested duel back to Supabase.
+This worker samples up to eight video frames with FFmpeg, calls a vision model, and posts a coach-reviewable suggested duel back to Supabase. It can run in Cloud Run later or privately on the coach's own computer now.
 
 It is deliberately conservative: a player is only selected when the model can match a visible shirt number or name to the supplied roster. A low-confidence suggestion must still be reviewed by a coach.
 
-## Local run
+## Free local mode (recommended for the MVP)
 
-1. Copy `.env.example` to `.env` and fill in the two secrets.
-2. Install dependencies: `python -m pip install -r requirements.txt`.
-3. Run: `uvicorn main:app --reload --port 8080`.
-4. Check `http://localhost:8080/health`.
+1. Install Ollama for Windows and run `ollama pull gemma3` once.
+2. Copy `.env.example` to `.env`. Keep `ANALYSIS_PROVIDER=ollama` and enter the three Supabase values locally; never commit this file.
+3. Use Docker Desktop to build and run the listener: `docker build -t touchline-duel-worker .` then `docker run --rm --env-file .env --add-host=host.docker.internal:host-gateway touchline-duel-worker python local_poller.py`.
+4. Leave that terminal open while you want queued clips analyzed.
+
+The listener makes only outbound HTTPS connections to Supabase. It does not expose your laptop to the internet and does not need Cloudflare Tunnel.
 
 ## Deploy to Cloud Run
 

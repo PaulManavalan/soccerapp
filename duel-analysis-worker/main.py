@@ -86,7 +86,7 @@ async def download_clip(url: str, destination: Path) -> None:
                     file.write(chunk)
 
 
-def data_url(frame: Path) -> str:
+def frame_base64(frame: Path) -> str:
     encoded = base64.b64encode(frame.read_bytes()).decode("ascii")
     return f"data:image/jpeg;base64,{encoded}"
 
@@ -101,12 +101,9 @@ def parse_model_json(text: str) -> dict:
         return json.loads(match.group(0))
 
 
-def assess_frames(frames: list[Path], roster: list[RosterPlayer]) -> dict:
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured")
+def analysis_prompt(roster: list[RosterPlayer]) -> str:
     roster_text = json.dumps([player.model_dump() for player in roster])
-    prompt = f"""You are assisting a high-school soccer coach. Review these chronological frames from one short clip.
+    return f"""You are assisting a high-school soccer coach. Review these chronological frames from one short clip.
 Identify the single clearest one-on-one duel involving the coach's team, if one is visible. A ground duel includes a tackle, dribble challenge, or loose-ball contest. An aerial duel includes a header or other aerial contest.
 
 Outcome rules: ground = won only when the coach's team retains possession; aerial = won when the coach's team prevents meaningful opponent progression or wins the ball. Be conservative. Do not invent jersey numbers, names, or a player identity. Only select playerId when a roster player can be reasonably matched by visible shirt number or clearly readable name.
@@ -116,13 +113,9 @@ Roster: {roster_text}
 Return JSON only, with this exact shape:
 {{"playerId":"roster UUID or null","duelType":"ground or aerial","outcome":"won or lost","confidence":0,"occurredAtSeconds":0,"pitchX":50,"pitchY":50,"note":"brief uncertainty-aware coaching explanation"}}
 pitchX and pitchY are percentages; use 50 when field location cannot be inferred. Confidence must be 0-100 and should be below 60 when the footage is unclear."""
-    content = [{"type": "input_text", "text": prompt}]
-    content.extend({"type": "input_image", "image_url": data_url(frame), "detail": "low"} for frame in frames)
-    response = OpenAI(api_key=api_key).responses.create(
-        model=os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
-        input=[{"role": "user", "content": content}],
-    )
-    result = parse_model_json(response.output_text)
+
+
+def normalize_result(result: dict, roster: list[RosterPlayer]) -> dict:
     roster_ids = {player.id for player in roster}
     if result.get("playerId") not in roster_ids:
         result["playerId"] = None
@@ -134,6 +127,43 @@ pitchX and pitchY are percentages; use 50 when field location cannot be inferred
     result["pitchY"] = max(0, min(100, float(result.get("pitchY", 50))))
     result["note"] = str(result.get("note", "Suggested from clip frames."))[:500]
     return result
+
+
+def assess_frames_openai(frames: list[Path], roster: list[RosterPlayer]) -> dict:
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured")
+    content = [{"type": "input_text", "text": analysis_prompt(roster)}]
+    content.extend({"type": "input_image", "image_url": frame_base64(frame), "detail": "low"} for frame in frames)
+    response = OpenAI(api_key=api_key).responses.create(
+        model=os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
+        input=[{"role": "user", "content": content}],
+    )
+    return normalize_result(parse_model_json(response.output_text), roster)
+
+
+def assess_frames_ollama(frames: list[Path], roster: list[RosterPlayer]) -> dict:
+    host = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
+    body = {
+        "model": os.environ.get("OLLAMA_MODEL", "gemma3"),
+        "prompt": analysis_prompt(roster),
+        "images": [frame_base64(frame).removeprefix("data:image/jpeg;base64,") for frame in frames],
+        "format": "json",
+        "stream": False,
+        "options": {"temperature": 0.1},
+    }
+    response = httpx.post(f"{host}/api/generate", json=body, timeout=180.0)
+    response.raise_for_status()
+    return normalize_result(parse_model_json(response.json().get("response", "")), roster)
+
+
+def assess_frames(frames: list[Path], roster: list[RosterPlayer]) -> dict:
+    provider = os.environ.get("ANALYSIS_PROVIDER", "ollama").lower()
+    if provider == "ollama":
+        return assess_frames_ollama(frames, roster)
+    if provider == "openai":
+        return assess_frames_openai(frames, roster)
+    raise RuntimeError("ANALYSIS_PROVIDER must be 'ollama' or 'openai'")
 
 
 async def send_callback(request: AnalysisRequest, result: dict) -> None:

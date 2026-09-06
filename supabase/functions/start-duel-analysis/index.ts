@@ -27,7 +27,8 @@ Deno.serve(async request => {
 
   const workerUrl = Deno.env.get('DUEL_ANALYSIS_WORKER_URL');
   const workerSecret = Deno.env.get('DUEL_ANALYSIS_WORKER_SECRET');
-  if (!workerUrl || !workerSecret) return Response.json({ error: 'Vision worker is not configured yet' }, { status: 503, headers: corsHeaders });
+  // A local queue listener can claim queued jobs directly, so it does not need a public URL.
+  if (!workerUrl || !workerSecret) return Response.json({ status: 'queued' }, { headers: corsHeaders });
 
   const admin = createClient(supabaseUrl, serviceRoleKey);
   const { data: roster, error: rosterError } = await admin
