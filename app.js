@@ -852,7 +852,7 @@ document.getElementById('bulkRosterForm').addEventListener('submit', async event
     const shirtNumber = Number(values[0]?.replace(/^#/, ''));
     const name = values[1];
     const position = values.slice(2).join(', ') || null;
-    if (!Number.isInteger(shirtNumber) || shirtNumber < 1 || shirtNumber > 99 || !name) problems.push(`Line ${index + 1}`);
+    if (!Number.isInteger(shirtNumber) || shirtNumber < 0 || shirtNumber > 99 || !name) problems.push(`Line ${index + 1}`);
     else players.push({ team_id: currentTeam.id, shirt_number: shirtNumber, name, position });
   });
   const newNumbers = players.map(player => player.shirt_number);
