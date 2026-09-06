@@ -975,22 +975,23 @@ document.getElementById('eventLogForm').addEventListener('submit', async event =
 markers.forEach(marker => { marker.dataset.initialOutcome = marker.dataset.outcome; });
 function applyStored(marker) { const saved = stored[marker.dataset.time]; if (!saved) return; marker.dataset.outcome = saved.outcome; marker.dataset.type = saved.type; marker.dataset.confirmed = saved.confirmed ? 'true' : ''; marker.classList.toggle('won', saved.outcome === 'won'); marker.classList.toggle('lost', saved.outcome === 'lost'); marker.classList.toggle('ground', saved.type === 'ground'); marker.classList.toggle('aerial', saved.type === 'aerial'); }
 async function save(marker, reviewStatus = 'confirmed') {
-  stored[marker.dataset.time] = { outcome: marker.dataset.outcome, type: marker.dataset.type, confirmed: marker.dataset.confirmed === 'true' };
-  localStorage.setItem(storageKey, JSON.stringify(stored));
-  if (!currentMatch) return;
+  if (!currentMatch) return false;
   const player = roster.find(item => item.id === marker.dataset.playerId);
   const [minutes, seconds] = marker.dataset.time.split(':').map(Number);
   const payload = { match_id: currentMatch.id, player_id: player?.id ?? null, occurred_at_seconds: minutes * 60 + seconds, pitch_x: Number.parseFloat(marker.style.getPropertyValue('--x')), pitch_y: Number.parseFloat(marker.style.getPropertyValue('--y')), duel_type: marker.dataset.type, outcome: marker.dataset.outcome, suggested_outcome: marker.dataset.initialOutcome, confidence: Number(marker.dataset.confidence), review_status: reviewStatus };
   const request = marker.dataset.duelId ? supabase.from('duels').update(payload).eq('id', marker.dataset.duelId).select().single() : supabase.from('duels').insert(payload).select().single();
   const { data, error } = await request;
-  if (error) { document.getElementById('reviewNote').textContent = `Saved locally; Supabase sync needs attention: ${error.message}`; return; }
+  if (error) { document.getElementById('reviewNote').textContent = `Could not save this correction: ${error.message}`; return false; }
   marker.dataset.duelId = data.id;
   const duelIndex = matchDuels.findIndex(duel => duel.id === data.id);
   if (duelIndex >= 0) matchDuels[duelIndex] = data;
   else matchDuels.push(data);
+  stored[marker.dataset.time] = { outcome: marker.dataset.outcome, type: marker.dataset.type, confirmed: marker.dataset.confirmed === 'true' };
+  localStorage.setItem(storageKey, JSON.stringify(stored));
   await syncPlayerMatchStats();
   renderManagerView();
   document.getElementById('reviewNote').textContent = 'Coach-reviewed event saved to this match.';
+  return true;
 }
 function updateTotal() { const total = markers.length; const won = markers.filter(marker => marker.dataset.outcome === 'won').length; document.getElementById('duelTeamTotal').innerHTML = `${won} <i>/ ${total}</i>`; document.querySelector('.duel-total small').textContent = total ? `${Math.round((won / total) * 100)}% · target 58%` : 'No duels logged yet'; }
 function renderDetail(marker) { const confirm = document.getElementById('confirmDuel'); const change = document.getElementById('changeDuel'); const playerSelect = document.getElementById('correctDuelPlayer'); if (!marker) { document.getElementById('duelDetailTitle').textContent = 'No duels logged yet'; document.getElementById('duelConfidence').textContent = 'Waiting for an event'; document.getElementById('duelClipLabel').textContent = 'Log a duel to review it here'; document.getElementById('duelClipTime').textContent = '—'; document.getElementById('duelPlayerName').textContent = '—'; document.getElementById('duelDetailType').textContent = '—'; document.getElementById('duelLocation').textContent = '—'; document.getElementById('duelDetailOutcome').textContent = '—'; playerSelect.innerHTML = '<option value="">Unassigned</option>'; confirm.disabled = true; change.disabled = true; return; } confirm.disabled = false; change.disabled = false; selected = marker; markers.forEach(item => item.classList.toggle('selected', item === marker)); const data = marker.dataset; const won = data.outcome === 'won'; const confirmed = data.confirmed === 'true'; playerSelect.innerHTML = `<option value="">Unassigned</option>${roster.map(player => `<option value="${player.id}" ${player.id === data.playerId ? 'selected' : ''}>#${player.shirt_number} ${escapeHtml(player.name)}</option>`).join('')}`; document.getElementById('duelDetailTitle').textContent = `${data.player} · ${won ? 'Won' : 'Lost'}`; const confidence = document.getElementById('duelConfidence'); confidence.textContent = confirmed ? 'Confirmed' : `${data.confidence}% confidence`; confidence.className = `status ${confirmed || data.confidence >= 75 ? 'good' : 'watch'}`; document.getElementById('duelClipLabel').textContent = confirmed ? 'Coach reviewed' : 'Suggested event'; document.getElementById('duelClipTime').textContent = data.time; document.getElementById('duelPlayerName').textContent = `#${data.number} ${data.player}`; document.getElementById('duelDetailType').textContent = `${data.type[0].toUpperCase()}${data.type.slice(1)} duel`; document.getElementById('duelLocation').textContent = data.zone; const outcome = document.getElementById('duelDetailOutcome'); outcome.textContent = won ? 'Won · retained possession' : 'Lost · opponent progressed'; outcome.className = won ? 'outcome-won' : 'outcome-lost'; confirm.textContent = confirmed ? 'Confirmed' : 'Confirm result'; document.getElementById('reviewNote').textContent = confirmed ? (data.duelId ? 'Coach-reviewed event saved to this match.' : 'Coach-reviewed event. Create a match to sync it to Supabase.') : 'Suggested event — confirm it or make a correction.'; document.getElementById('correctionPanel').hidden = true; }
@@ -1005,10 +1006,10 @@ document.querySelector('.manager-head .match-button')?.addEventListener('click',
 document.querySelector('.insight-card a[href="#tactics"]')?.addEventListener('click', event => { event.preventDefault(); activateTab('analysis'); });
 document.querySelectorAll('.formation-player').forEach(player => player.addEventListener('click', () => { document.querySelectorAll('.formation-player').forEach(item => item.classList.remove('active')); player.classList.add('active'); const data = player.dataset; const card = document.getElementById('selectedPlayer'); card.querySelector('.selected-number').textContent = data.number; card.querySelector('.eyebrow').textContent = data.position; card.querySelector('h2').innerHTML = `${data.name} <span>${data.rating}</span>`; card.querySelector('small').textContent = `${data.minutes} minutes played`; document.getElementById('statMinutes').textContent = `${data.minutes}'`; document.getElementById('statPasses').textContent = data.passes; document.getElementById('statShots').textContent = data.shots; document.getElementById('statTackles').textContent = data.tackles; }));
 markers.forEach(marker => { applyStored(marker); attachDuelMarker(marker); }); filters.forEach(id => document.getElementById(id).addEventListener('change', filterMarkers));
-document.getElementById('confirmDuel').addEventListener('click', async () => { if (!selected) return; selected.dataset.confirmed = 'true'; await save(selected); renderDetail(selected); });
+document.getElementById('confirmDuel').addEventListener('click', async () => { if (!selected) return; selected.dataset.confirmed = 'true'; if (!await save(selected)) return loadMatchDuels(); renderDetail(selected); });
 document.getElementById('changeDuel').addEventListener('click', () => { const panel = document.getElementById('correctionPanel'); panel.hidden = !panel.hidden; pickingDuelLocation = false; });
-document.querySelectorAll('[data-correction]').forEach(button => button.addEventListener('click', async () => { selected.dataset.outcome = button.dataset.correction; selected.dataset.confirmed = 'true'; selected.classList.toggle('won', selected.dataset.outcome === 'won'); selected.classList.toggle('lost', selected.dataset.outcome === 'lost'); await save(selected, 'corrected'); updateTotal(); filterMarkers(); renderDetail(selected); }));
-document.querySelectorAll('[data-correction-type]').forEach(button => button.addEventListener('click', async () => { selected.dataset.type = button.dataset.correctionType; selected.dataset.confirmed = 'true'; selected.classList.toggle('ground', selected.dataset.type === 'ground'); selected.classList.toggle('aerial', selected.dataset.type === 'aerial'); await save(selected, 'corrected'); filterMarkers(); renderDetail(selected); }));
+document.querySelectorAll('[data-correction]').forEach(button => button.addEventListener('click', async () => { selected.dataset.outcome = button.dataset.correction; selected.dataset.confirmed = 'true'; selected.classList.toggle('won', selected.dataset.outcome === 'won'); selected.classList.toggle('lost', selected.dataset.outcome === 'lost'); if (!await save(selected, 'corrected')) return loadMatchDuels(); updateTotal(); filterMarkers(); renderDetail(selected); }));
+document.querySelectorAll('[data-correction-type]').forEach(button => button.addEventListener('click', async () => { selected.dataset.type = button.dataset.correctionType; selected.dataset.confirmed = 'true'; selected.classList.toggle('ground', selected.dataset.type === 'ground'); selected.classList.toggle('aerial', selected.dataset.type === 'aerial'); if (!await save(selected, 'corrected')) return loadMatchDuels(); filterMarkers(); renderDetail(selected); }));
 document.getElementById('saveDuelPlayer').addEventListener('click', async () => {
   if (!selected) return;
   const player = roster.find(item => item.id === document.getElementById('correctDuelPlayer').value);
@@ -1017,7 +1018,7 @@ document.getElementById('saveDuelPlayer').addEventListener('click', async () => 
   selected.dataset.number = player?.shirt_number || '–';
   selected.querySelector('span').textContent = selected.dataset.number;
   selected.dataset.confirmed = 'true';
-  await save(selected, 'corrected');
+  if (!await save(selected, 'corrected')) return loadMatchDuels();
   filterMarkers(); renderDetail(selected);
 });
 document.getElementById('pickDuelLocation').addEventListener('click', () => {
@@ -1036,7 +1037,7 @@ document.querySelector('.duel-pitch').addEventListener('click', async event => {
   selected.dataset.zone = locationLabel(x, y);
   selected.dataset.confirmed = 'true';
   pickingDuelLocation = false;
-  await save(selected, 'corrected');
+  if (!await save(selected, 'corrected')) return loadMatchDuels();
   renderDetail(selected);
 });
 updateTotal(); renderDetail(selected);
