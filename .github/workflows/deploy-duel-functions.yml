@@ -20,8 +20,13 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      - name: Deploy duel functions
-        run: supabase functions deploy start-duel-analysis complete-duel-analysis --project-ref "$SUPABASE_PROJECT_ID"
+      - name: Deploy start-analysis function
+        run: supabase functions deploy start-duel-analysis --project-ref "$SUPABASE_PROJECT_ID"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: cjhujsihefxrmkqllpcq
+      - name: Deploy completion callback
+        run: supabase functions deploy complete-duel-analysis --project-ref "$SUPABASE_PROJECT_ID"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_ID: cjhujsihefxrmkqllpcq
