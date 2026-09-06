@@ -2,7 +2,19 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type, x-worker-secret' };
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const defaultSecretKey = () => {
+  const legacy = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (legacy) return legacy;
+  const current = Deno.env.get('SUPABASE_SECRET_KEYS');
+  if (!current) throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEYS');
+  try {
+    const parsed = JSON.parse(current);
+    return parsed.default || Object.values(parsed)[0] as string;
+  } catch {
+    return current;
+  }
+};
+const serviceRoleKey = defaultSecretKey();
 
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });

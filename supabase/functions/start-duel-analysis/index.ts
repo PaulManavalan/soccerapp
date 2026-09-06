@@ -2,8 +2,20 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type' };
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const publishableKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const defaultProjectKey = (legacyName: string, currentName: string) => {
+  const legacy = Deno.env.get(legacyName);
+  if (legacy) return legacy;
+  const current = Deno.env.get(currentName);
+  if (!current) throw new Error(`Missing ${legacyName} or ${currentName}`);
+  try {
+    const parsed = JSON.parse(current);
+    return parsed.default || Object.values(parsed)[0] as string;
+  } catch {
+    return current;
+  }
+};
+const publishableKey = defaultProjectKey('SUPABASE_ANON_KEY', 'SUPABASE_PUBLISHABLE_KEYS');
+const serviceRoleKey = defaultProjectKey('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEYS');
 
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
