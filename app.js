@@ -838,6 +838,35 @@ document.getElementById('playerForm').addEventListener('submit', async event => 
   event.target.reset(); status.classList.remove('is-error'); status.textContent = `${name} was added.`; await loadTeamData();
 });
 
+document.getElementById('bulkRosterForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!currentTeam) return;
+  const input = document.getElementById('bulkRosterInput');
+  const status = document.getElementById('bulkRosterStatus');
+  const rows = input.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  if (!rows.length) { status.textContent = 'Paste at least one player.'; status.classList.add('is-error'); return; }
+  const players = [];
+  const problems = [];
+  rows.forEach((line, index) => {
+    const values = line.split(/\t|,/).map(value => value.trim());
+    const shirtNumber = Number(values[0]?.replace(/^#/, ''));
+    const name = values[1];
+    const position = values.slice(2).join(', ') || null;
+    if (!Number.isInteger(shirtNumber) || shirtNumber < 1 || shirtNumber > 99 || !name) problems.push(`Line ${index + 1}`);
+    else players.push({ team_id: currentTeam.id, shirt_number: shirtNumber, name, position });
+  });
+  const newNumbers = players.map(player => player.shirt_number);
+  const duplicateNumber = newNumbers.find((number, index) => newNumbers.indexOf(number) !== index) || newNumbers.find(number => roster.some(player => player.shirt_number === number));
+  if (problems.length || duplicateNumber) {
+    status.textContent = problems.length ? `Use “number, name, position” on ${problems.join(', ')}.` : `Shirt number #${duplicateNumber} is already in this roster or pasted twice.`;
+    status.classList.add('is-error'); return;
+  }
+  status.classList.remove('is-error'); status.textContent = `Adding ${players.length} players…`;
+  const { error } = await supabase.from('players').insert(players);
+  if (error) { status.textContent = error.message; status.classList.add('is-error'); return; }
+  input.value = ''; status.textContent = `${players.length} players added.`; await loadTeamData();
+});
+
 document.getElementById('matchKickoff').value = new Date().toISOString().slice(0, 16);
 document.getElementById('matchForm').addEventListener('submit', async event => {
   event.preventDefault();
