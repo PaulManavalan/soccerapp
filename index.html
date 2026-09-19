@@ -250,10 +250,13 @@
 <p class="eyebrow">Live analysis</p>
 <h2>Team heatmap</h2>
 </div>
-<button class="select-button">All actions <span>⌄</span>
-</button>
+<select id="teamHeatmapScope" class="select-button" aria-label="Choose actions for the team heatmap">
+<option value="all">All actions</option>
+<option value="events">Logged events</option>
+<option value="duels">Duels</option>
+</select>
 </div>
-<div class="pitch">
+<div id="teamHeatmap" class="pitch">
 <div class="center-line">
 </div>
 <div class="center-circle">
@@ -262,22 +265,7 @@
 </div>
 <div class="box right-box">
 </div>
-<span class="hot h1">
-</span>
-<span class="hot h2">
-</span>
-<span class="hot h3">
-</span>
-<span class="hot h4">
-</span>
-<span class="hot h5">
-</span>
-<span class="hot h6">
-</span>
-<span class="hot h7">
-</span>
-<span class="hot h8">
-</span>
+<p id="teamHeatmapEmpty" class="heatmap-empty">Log actions to build your ball heatmap.</p>
 <div class="pitch-key">
 <span>
 <i class="low">
@@ -492,6 +480,15 @@
 <span>Tackles</span>
 </div>
 </div>
+<section class="player-heatmap" aria-labelledby="playerHeatmapTitle">
+<div class="player-heatmap-heading">
+<p class="eyebrow">Selected player</p>
+<strong id="playerHeatmapTitle">Activity heatmap</strong>
+</div>
+<div id="playerHeatmap" class="mini-pitch">
+<p id="playerHeatmapEmpty" class="heatmap-empty">Select a player with logged actions.</p>
+</div>
+</section>
 <div class="bench-player">
 <span class="avatar">TH</span>
 <div>

@@ -340,6 +340,7 @@ function selectManagerPlayer(player, minutes) {
   document.getElementById('statPasses').textContent = `${stats.completedPasses} / ${stats.totalPasses}`;
   document.getElementById('statShots').textContent = stats.shots;
   document.getElementById('statTackles').textContent = stats.tacklesWon;
+  renderPlayerHeatmap(player.id, player.name);
 }
 function getStarterIds() {
   const sentOff = getRedCardedPlayerIds();
@@ -492,6 +493,46 @@ function renderLiveStats() {
   document.getElementById('livePassAccuracy').innerHTML = totalPasses ? `${Math.round((completedPasses / totalPasses) * 100)}<span>%</span>` : '—';
   document.getElementById('livePassDetail').textContent = totalPasses ? `${completedPasses} / ${totalPasses} completed` : 'Complete / attempted passes';
 }
+function heatmapActions(playerId = null, scope = 'all') {
+  const events = scope === 'duels' ? [] : matchEvents.filter(event => !playerId || event.player_id === playerId).map(event => ({ x: event.pitch_x, y: event.pitch_y }));
+  const duels = scope === 'events' ? [] : matchDuels.filter(duel => !playerId || duel.player_id === playerId).map(duel => ({ x: duel.pitch_x, y: duel.pitch_y }));
+  return [...events, ...duels].filter(action => Number.isFinite(Number(action.x)) && Number.isFinite(Number(action.y)));
+}
+function renderHeatmap(containerId, emptyId, actions, emptyMessage) {
+  const container = document.getElementById(containerId);
+  const empty = document.getElementById(emptyId);
+  if (!container || !empty) return;
+  container.querySelectorAll('.heatmap-point').forEach(point => point.remove());
+  empty.textContent = emptyMessage;
+  empty.hidden = actions.length > 0;
+  const clusters = new Map();
+  actions.forEach(action => {
+    const x = Math.round(Number(action.x) / 4) * 4;
+    const y = Math.round(Number(action.y) / 4) * 4;
+    const key = `${x}:${y}`;
+    clusters.set(key, { x, y, count: (clusters.get(key)?.count || 0) + 1 });
+  });
+  [...clusters.values()].forEach(cluster => {
+    const point = document.createElement('span');
+    point.className = 'heatmap-point';
+    const size = Math.min(120, 46 + cluster.count * 18);
+    point.style.left = `${cluster.x}%`; point.style.top = `${cluster.y}%`;
+    point.style.width = `${size}px`; point.style.height = `${size}px`;
+    point.style.opacity = String(Math.min(.95, .38 + cluster.count * .14));
+    point.title = `${cluster.count} logged action${cluster.count === 1 ? '' : 's'}`;
+    container.append(point);
+  });
+}
+function renderTeamHeatmap() {
+  const scope = document.getElementById('teamHeatmapScope')?.value || 'all';
+  const actions = heatmapActions(null, scope);
+  renderHeatmap('teamHeatmap', 'teamHeatmapEmpty', actions, 'Log actions to build your ball heatmap.');
+  const summary = document.querySelector('.heatmap-panel .panel-foot p');
+  if (summary) summary.innerHTML = actions.length ? `<b>${actions.length}</b> logged action${actions.length === 1 ? '' : 's'} shown on the field.` : 'Log an event or duel to start the heatmap.';
+}
+function renderPlayerHeatmap(playerId, playerName) {
+  renderHeatmap('playerHeatmap', 'playerHeatmapEmpty', heatmapActions(playerId), `${playerName || 'This player'} has no logged actions yet.`);
+}
 function renderEventTimeline() {
   const timeline = document.getElementById('eventTimeline');
   document.getElementById('eventCount').textContent = `${matchEvents.length} event${matchEvents.length === 1 ? '' : 's'}`;
@@ -509,11 +550,11 @@ function renderEventTimeline() {
 }
 async function loadMatchEvents() {
   matchEvents = [];
-  if (!currentMatch) { renderLiveStats(); renderEventTimeline(); renderManagerView(); return; }
+  if (!currentMatch) { renderLiveStats(); renderEventTimeline(); renderTeamHeatmap(); renderManagerView(); return; }
   const { data, error } = await supabase.from('match_events').select('id,player_id,event_type,occurred_at_seconds,pitch_x,pitch_y,notes,created_at').eq('match_id', currentMatch.id);
   if (error) { document.getElementById('eventLogStatus').textContent = 'Event tracking needs the new Supabase migration before it can save data.'; document.getElementById('eventLogStatus').classList.add('is-error'); renderLiveStats(); renderEventTimeline(); return; }
   matchEvents = data ?? [];
-  renderLiveStats(); renderEventTimeline(); renderManagerView();
+  renderLiveStats(); renderEventTimeline(); renderTeamHeatmap(); renderManagerView();
 }
 function createFinding(finding, warning = false) {
   const row = document.createElement('div'); row.className = `finding${warning ? ' warning' : ''}`;
@@ -651,7 +692,7 @@ async function loadMatchDuels() {
   markers = [];
   selected = null;
   matchDuels = [];
-  if (!selectedDuelMatchId) { updateTotal(); renderDetail(null); return; }
+  if (!selectedDuelMatchId) { updateTotal(); renderDetail(null); renderTeamHeatmap(); return; }
   const { data: savedDuels, error } = await supabase.from('duels').select('id,match_id,player_id,occurred_at_seconds,pitch_x,pitch_y,duel_type,outcome,suggested_outcome,confidence,review_status').eq('match_id', selectedDuelMatchId);
   if (error) return;
   matchDuels = savedDuels ?? [];
@@ -673,7 +714,7 @@ async function loadMatchDuels() {
   updateTotal();
   filterMarkers();
   renderDetail(selected);
-  if (selectedDuelMatchId === currentMatch?.id) renderManagerView();
+  if (selectedDuelMatchId === currentMatch?.id) { renderTeamHeatmap(); renderManagerView(); }
 }
 async function loadDuelClipWorkspace() {
   const matchSelect = document.getElementById('duelClipMatch');
@@ -1059,7 +1100,7 @@ document.getElementById('eventLogForm').addEventListener('submit', async event =
   matchEvents.push(...data);
   if (payload.event_type === 'goal') await updateMatchClockState({ team_score: (currentMatch.team_score ?? 0) + 1 }, `Goal added at ${timeLabel(payload.occurred_at_seconds)}.`);
   event.target.reset(); status.textContent = `${eventLabels[payload.event_type]} logged at ${timeLabel(payload.occurred_at_seconds)}.${eventsToSave.length > 1 ? ' Foul committed added automatically.' : ''}`;
-  renderDuelPlayerOptions(); renderEventPlayerOptions(); renderLiveStats(); renderEventTimeline(); await syncPlayerMatchStats(); renderManagerView();
+  renderDuelPlayerOptions(); renderEventPlayerOptions(); renderLiveStats(); renderEventTimeline(); renderTeamHeatmap(); await syncPlayerMatchStats(); renderManagerView();
 });
 
 markers.forEach(marker => { marker.dataset.initialOutcome = marker.dataset.outcome; });
@@ -1104,6 +1145,7 @@ document.querySelector('a[href="#reports"]')?.addEventListener('click', event =>
 document.querySelector('.match-banner .match-button')?.addEventListener('click', () => activateTab('match'));
 document.querySelector('.manager-head .match-button')?.addEventListener('click', () => { activateTab('manager'); document.querySelector('.bench-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 document.querySelector('.insight-card a[href="#tactics"]')?.addEventListener('click', event => { event.preventDefault(); activateTab('analysis'); });
+document.getElementById('teamHeatmapScope').addEventListener('change', renderTeamHeatmap);
 document.querySelectorAll('.formation-player').forEach(player => player.addEventListener('click', () => { document.querySelectorAll('.formation-player').forEach(item => item.classList.remove('active')); player.classList.add('active'); const data = player.dataset; const card = document.getElementById('selectedPlayer'); card.querySelector('.selected-number').textContent = data.number; card.querySelector('.eyebrow').textContent = data.position; card.querySelector('h2').innerHTML = `${data.name} <span>${data.rating}</span>`; card.querySelector('small').textContent = `${data.minutes} minutes played`; document.getElementById('statMinutes').textContent = `${data.minutes}'`; document.getElementById('statPasses').textContent = data.passes; document.getElementById('statShots').textContent = data.shots; document.getElementById('statTackles').textContent = data.tackles; }));
 markers.forEach(marker => { applyStored(marker); attachDuelMarker(marker); }); filters.forEach(id => document.getElementById(id).addEventListener('change', filterMarkers));
 document.getElementById('duelMatch').addEventListener('change', async event => { selectedDuelMatchId = event.target.value || null; await loadMatchDuels(); });
