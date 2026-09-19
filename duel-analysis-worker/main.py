@@ -57,13 +57,13 @@ def clip_duration_seconds(video_path: Path) -> float:
     return max(1.0, min(float(raw), 60.0))
 
 
-def extract_frames(video_path: Path, frames_dir: Path) -> list[Path]:
+def extract_frames(video_path: Path, frames_dir: Path, max_frames: int = MAX_FRAMES, frame_width: int = 768) -> list[Path]:
     duration = clip_duration_seconds(video_path)
-    fps = max(0.15, min(2.0, MAX_FRAMES / duration))
+    fps = max(0.15, min(2.0, max_frames / duration))
     output_pattern = frames_dir / "frame-%02d.jpg"
     run([
-        "ffmpeg", "-y", "-i", str(video_path), "-vf", f"fps={fps},scale=768:-2",
-        "-frames:v", str(MAX_FRAMES), "-q:v", "4", str(output_pattern),
+        "ffmpeg", "-y", "-i", str(video_path), "-vf", f"fps={fps},scale={frame_width}:-2",
+        "-frames:v", str(max_frames), "-q:v", "4", str(output_pattern),
     ])
     frames = sorted(frames_dir.glob("frame-*.jpg"))
     if not frames:
@@ -167,6 +167,12 @@ def assess_frames(frames: list[Path], roster: list[RosterPlayer]) -> dict:
     raise RuntimeError("ANALYSIS_PROVIDER must be 'ollama' or 'openai'")
 
 
+def frame_sampling_settings() -> tuple[int, int]:
+    """Keep Qwen within Ollama's default local context while preserving time cues."""
+    model = os.environ.get("OLLAMA_MODEL", "").lower()
+    return (3, 512) if model.startswith("qwen2.5vl") else (MAX_FRAMES, 768)
+
+
 def apply_calibration(result: dict, calibration: dict | None) -> dict:
     if not calibration or not isinstance(calibration.get("frame_corners"), list) or len(calibration["frame_corners"]) != 4:
         return result
@@ -214,7 +220,8 @@ async def analyze(request: AnalysisRequest, x_worker_secret: str | None = Header
             frames_dir = temp / "frames"
             frames_dir.mkdir()
             await download_clip(str(request.clipUrl), video_path)
-            frames = await asyncio.to_thread(extract_frames, video_path, frames_dir)
+            max_frames, frame_width = frame_sampling_settings()
+            frames = await asyncio.to_thread(extract_frames, video_path, frames_dir, max_frames, frame_width)
             result = apply_calibration(await asyncio.to_thread(assess_frames, frames, request.roster), request.calibration)
             await send_callback(request, result)
         return {"accepted": True, "jobId": request.jobId}

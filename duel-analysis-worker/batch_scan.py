@@ -82,6 +82,12 @@ def assess_candidate(frames: list[Path]) -> dict:
     }
 
 
+def frame_sampling_settings() -> tuple[int, int]:
+    import os
+    model = os.environ.get("OLLAMA_MODEL", "").lower()
+    return (3, 512) if model.startswith("qwen2.5vl") else (8, 768)
+
+
 def timestamp_label(seconds: float) -> str:
     total = max(0, round(seconds))
     hours, remainder = divmod(total, 3600)
@@ -114,7 +120,8 @@ def scan(source: Path, output: Path, window: float, stride: float, clip_length: 
                 shutil.rmtree(frames_dir)
             frames_dir.mkdir()
             extract_clip(source, start, min(window, max(1, duration - start)), window_path)
-            result = assess_candidate(extract_frames(window_path, frames_dir))
+            max_frames, frame_width = frame_sampling_settings()
+            result = assess_candidate(extract_frames(window_path, frames_dir, max_frames, frame_width))
             event_time = min(duration, start + min(window, result["momentOffsetSeconds"]))
             is_duplicate = any(abs(event_time - prior) < max(4, clip_length / 2) for prior in accepted_times)
             record = {"window": index, "windowStartSeconds": start, "eventTimeSeconds": event_time, **result}
