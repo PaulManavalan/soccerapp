@@ -36,14 +36,14 @@ def extract_clip(source: Path, start: float, duration: float, destination: Path)
 
 def candidate_prompt() -> str:
     return """You are screening chronological frames from one short high-school soccer video window for a coach to review.
-This is a HIGH-RECALL candidate finder: prefer a possible contest over missing a real duel. Set isDuel true whenever the frames plausibly show two opposing players contesting the ball through a tackle attempt, a dribble challenge, a loose-ball race, or an aerial/header challenge. If the ball is small, distant, briefly obscured, or the contact is uncertain, still set isDuel true when the players' movement plausibly indicates a contest; give it a lower confidence.
+Set isDuel true only when you can identify a SPECIFIC moment inside this window where two opposing players actually fight for the ball: a tackle attempt, dribble challenge, loose-ball contest, or aerial/header contest. Being near another player, routine pressure, a normal pass, or an ordinary interception is not enough. Do not infer a duel just because several players appear near the ball.
 
-Set isDuel false only when the action is clearly uncontested: a routine pass, one player alone with the ball, a clear break in play, or no meaningful player-to-player challenge. False positives are acceptable because the coach will review each saved clip.
+When true, give the specific visual evidence in note (for example, "defender extends a leg as attacker dribbles") and set momentOffsetSeconds to when that contest occurs. If you cannot name a specific ball-contest moment, return false. The moment should normally be at least one second after the beginning and before the final second of the window.
 
 Return JSON only with this exact shape:
 {"isDuel":true,"duelType":"ground or aerial","confidence":0,"momentOffsetSeconds":0,"note":"brief reason"}
 
-For false, still supply duelType as "ground", confidence 0, and momentOffsetSeconds 0. Confidence must be 0-100: use 20-49 for a plausible but unclear contest, 50-74 for likely, and 75-100 only when clear. momentOffsetSeconds is the estimated time after the start of this window where the contest occurs."""
+For false, still supply duelType as "ground", confidence 0, and momentOffsetSeconds 0. Confidence must be 0-100: use 30-49 for a plausible but unclear contest, 50-74 for likely, and 75-100 only when the contest is clear. Never reuse a default confidence; assess each window independently."""
 
 
 def assess_candidate(frames: list[Path]) -> dict:
@@ -120,7 +120,10 @@ def scan(source: Path, output: Path, window: float, stride: float, clip_length: 
             event_time = min(duration, start + min(window, result["momentOffsetSeconds"]))
             is_duplicate = any(abs(event_time - prior) < max(4, clip_length / 2) for prior in accepted_times)
             record = {"window": index, "windowStartSeconds": start, "eventTimeSeconds": event_time, **result}
-            if result["isDuel"] and result["confidence"] >= threshold and not is_duplicate:
+            has_specific_moment = 0.75 <= result["momentOffsetSeconds"] <= max(0.75, window - 0.75)
+            generic_note = len(result["note"].split()) < 5
+            accepted_candidate = result["isDuel"] and result["confidence"] >= threshold and has_specific_moment and not generic_note and not is_duplicate
+            if accepted_candidate:
                 accepted += 1
                 accepted_times.append(event_time)
                 clip_start = max(0, min(duration - 1, event_time - clip_length / 2))
@@ -131,6 +134,8 @@ def scan(source: Path, output: Path, window: float, stride: float, clip_length: 
                 print(f"[{index}/{len(starts)}] saved {clip_name} ({result['confidence']}%)")
             elif index % 10 == 0:
                 print(f"[{index}/{len(starts)}] scanned; {accepted} likely duels saved")
+            if result["isDuel"] and not accepted_candidate:
+                record["rejectedCandidate"] = "no specific moment" if not has_specific_moment else "generic evidence" if generic_note else "below threshold or duplicate"
             manifest.write(json.dumps(record) + "\n")
             manifest.flush()
     print(f"Finished. Saved {accepted} likely duel clips. Review {manifest_path.name} alongside the clips.")
@@ -143,7 +148,7 @@ def main() -> None:
     parser.add_argument("--window", type=float, default=14, help="Seconds analyzed per model call (default: 14)")
     parser.add_argument("--stride", type=float, default=10, help="Seconds between windows; must not exceed window (default: 10)")
     parser.add_argument("--clip-length", type=float, default=10, help="Length of each saved candidate clip (default: 10)")
-    parser.add_argument("--threshold", type=int, default=30, help="Minimum model confidence to save a coach-review candidate (default: 30)")
+    parser.add_argument("--threshold", type=int, default=50, help="Minimum model confidence to save a coach-review candidate (default: 50)")
     args = parser.parse_args()
     scan(args.source, args.output, args.window, args.stride, args.clip_length, args.threshold)
 
