@@ -678,14 +678,16 @@ async function loadMatchDuels() {
 async function loadDuelClipWorkspace() {
   const matchSelect = document.getElementById('duelClipMatch');
   const jobsContainer = document.getElementById('duelClipJobs');
+  const calibrationProgress = document.getElementById('duelCalibrationProgress');
   if (!currentTeam) {
     matchSelect.innerHTML = '<option value="">Choose match</option>';
     jobsContainer.innerHTML = '<p class="empty-lineup">Create a team and match before uploading clips.</p>';
+    calibrationProgress.textContent = 'Build a 10-clip calibration set after creating a team and match.';
     return;
   }
   const [matchesResult, jobsResult] = await Promise.all([
     supabase.from('matches').select('id,opponent_name,started_at,status').eq('team_id', currentTeam.id).order('started_at', { ascending: false }),
-    supabase.from('duel_clip_jobs').select('id,match_id,storage_path,original_filename,status,created_at,suggested_player_id,suggested_type,suggested_outcome,confidence').eq('team_id', currentTeam.id).order('created_at', { ascending: false }).limit(8),
+    supabase.from('duel_clip_jobs').select('id,match_id,storage_path,original_filename,status,created_at,suggested_player_id,suggested_type,suggested_outcome,confidence,duel_id').eq('team_id', currentTeam.id).order('created_at', { ascending: false }).limit(50),
   ]);
   const matches = matchesResult.data ?? [];
   matchSelect.innerHTML = matches.length
@@ -693,6 +695,8 @@ async function loadDuelClipWorkspace() {
     : '<option value="">Create a match first</option>';
   matchSelect.disabled = !matches.length;
   duelClipJobs = jobsResult.error ? [] : (jobsResult.data ?? []);
+  const linkedCount = duelClipJobs.filter(job => job.duel_id).length;
+  calibrationProgress.textContent = `${linkedCount} of 10 clips linked to a duel event. Clear ground, aerial, won, and lost examples make the set more useful.`;
   if (jobsResult.error) {
     jobsContainer.innerHTML = '<p class="empty-lineup">Run the clip-analysis database setup before uploading clips.</p>';
     return;
@@ -700,7 +704,8 @@ async function loadDuelClipWorkspace() {
   jobsContainer.innerHTML = duelClipJobs.length ? duelClipJobs.map(job => {
     const statusLabel = job.status === 'complete' ? 'Suggestion ready' : job.status === 'failed' ? 'Needs attention' : job.status === 'analyzing' ? 'Analyzing clip' : 'Queued for analysis';
     const suggestion = job.status === 'complete' ? `${job.suggested_type || 'Duel'} · ${job.suggested_outcome || 'review'}${job.confidence ? ` · ${job.confidence}%` : ''}` : 'Video is private to your team.';
-    return `<div class="clip-job"><div><strong>${escapeHtml(job.original_filename)}</strong><small>${escapeHtml(suggestion)}</small></div><span class="status ${job.status === 'complete' ? 'good' : job.status === 'failed' ? 'watch' : ''}">${statusLabel}</span><button class="delete-clip" type="button" data-delete-clip="${job.id}" ${job.status === 'analyzing' ? 'disabled title="Wait for analysis to finish"' : ''}>Remove</button></div>`;
+    const reviewButton = job.duel_id ? `<button class="change-duel" type="button" data-review-clip="${job.id}">Review duel</button>` : '';
+    return `<div class="clip-job"><div><strong>${escapeHtml(job.original_filename)}</strong><small>${escapeHtml(suggestion)}</small></div><span class="status ${job.status === 'complete' ? 'good' : job.status === 'failed' ? 'watch' : ''}">${statusLabel}</span>${reviewButton}<button class="delete-clip" type="button" data-delete-clip="${job.id}" ${job.status === 'analyzing' ? 'disabled title="Wait for analysis to finish"' : ''}>Remove</button></div>`;
   }).join('') : '<p class="empty-lineup">No uploaded clips yet.</p>';
   jobsContainer.querySelectorAll('[data-delete-clip]').forEach(button => button.addEventListener('click', async () => {
     const job = duelClipJobs.find(item => item.id === button.dataset.deleteClip);
@@ -712,6 +717,15 @@ async function loadDuelClipWorkspace() {
     const { error: jobError } = await supabase.from('duel_clip_jobs').delete().eq('id', job.id).eq('team_id', currentTeam.id);
     if (jobError) { status.textContent = `Video removed, but queue cleanup failed: ${jobError.message}`; status.classList.add('is-error'); return; }
     status.textContent = 'Clip removed.'; await loadDuelClipWorkspace();
+  }));
+  jobsContainer.querySelectorAll('[data-review-clip]').forEach(button => button.addEventListener('click', async () => {
+    const job = duelClipJobs.find(item => item.id === button.dataset.reviewClip);
+    if (!job?.duel_id) return;
+    selectedDuelMatchId = job.match_id;
+    document.getElementById('duelMatch').value = job.match_id;
+    await loadMatchDuels();
+    const marker = markers.find(item => item.dataset.duelId === job.duel_id);
+    if (marker) { renderDetail(marker); marker.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
   }));
 }
 async function initialiseAuth() {
