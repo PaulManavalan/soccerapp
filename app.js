@@ -587,6 +587,45 @@ function setReportEmpty() {
   document.getElementById('analysisFocus').replaceChildren(createFinding({ title: 'No completed-match data', description: 'Log events and duels during a completed match to identify focus areas.' }, true));
   document.getElementById('analysisPlanTitle').textContent = 'Suggested focus: log more match data';
   document.getElementById('analysisPlanText').textContent = 'Complete a match with events and duels to generate a targeted training recommendation.';
+  document.getElementById('momentumStatus').textContent = 'Awaiting match data';
+  document.getElementById('momentumStatus').className = 'status watch';
+  document.getElementById('momentumSummary').textContent = 'Logged attacking actions and defensive work will show the match’s momentum swings.';
+  document.getElementById('momentumBars').replaceChildren();
+}
+function renderMomentumTracker(match, events, duels) {
+  const bars = document.getElementById('momentumBars');
+  const status = document.getElementById('momentumStatus');
+  const summary = document.getElementById('momentumSummary');
+  const buckets = Array.from({ length: 6 }, (_, index) => ({ start: index * 15, attack: 0, defend: 0 }));
+  const bucketFor = seconds => buckets[Math.min(buckets.length - 1, Math.max(0, Math.floor((Number(seconds) || 0) / 900)))];
+  events.forEach(event => {
+    const bucket = bucketFor(event.occurred_at_seconds);
+    const attackingThird = Number(event.pitch_y) < 50;
+    const attackingWeight = { goal: 4, shot_on_target: 2, shot_off_target: 1, pass_complete: .35, possession_won: .6, foul_won: .3 }[event.event_type] || 0;
+    const defensiveWeight = { clearance: 1.1, interception: .9, tackle_won: .8, possession_lost: 1, tackle_lost: .7, foul_committed: .35 }[event.event_type] || 0;
+    bucket.attack += attackingThird ? attackingWeight : attackingWeight * .35;
+    bucket.defend += !attackingThird ? defensiveWeight : defensiveWeight * .35;
+  });
+  duels.forEach(duel => {
+    const bucket = bucketFor(duel.occurred_at_seconds);
+    const attackingThird = Number(duel.pitch_y) < 50;
+    if (duel.outcome === 'won') bucket.attack += attackingThird ? .9 : .35;
+    else bucket.defend += attackingThird ? .35 : .9;
+  });
+  const total = events.length + duels.length;
+  if (!total) { status.textContent = 'No tracked actions'; status.className = 'status watch'; summary.textContent = 'Log timestamped actions and duels to reveal momentum shifts.'; bars.replaceChildren(); return; }
+  const maxValue = Math.max(1, ...buckets.flatMap(bucket => [bucket.attack, bucket.defend]));
+  bars.replaceChildren(...buckets.map(bucket => {
+    const column = document.createElement('div'); column.className = 'momentum-bar';
+    const attack = document.createElement('i'); attack.className = 'attack'; attack.style.height = `${Math.max(2, (bucket.attack / maxValue) * 51)}px`;
+    const defend = document.createElement('i'); defend.className = 'defend'; defend.style.height = `${Math.max(2, (bucket.defend / maxValue) * 51)}px`;
+    const label = document.createElement('small'); label.textContent = `${bucket.start}–${bucket.start + 15}'`;
+    column.append(attack, defend, label); return column;
+  }));
+  const best = [...buckets].sort((a, b) => (b.attack - b.defend) - (a.attack - a.defend))[0];
+  const workload = [...buckets].sort((a, b) => (b.defend - b.attack) - (a.defend - a.attack))[0];
+  status.textContent = `${total} actions mapped`; status.className = 'status good';
+  summary.textContent = `Strongest attacking spell: ${best.start}–${best.start + 15}'. Highest defensive workload: ${workload.start}–${workload.start + 15}'.`;
 }
 async function loadPostGameMatches() {
   if (!currentTeam) return;
@@ -602,8 +641,8 @@ async function renderPostGameReport(match) {
   if (!match) { setReportEmpty(); return; }
   const [statsResult, eventsResult, duelsResult] = await Promise.all([
     supabase.from('player_match_stats').select('player_id,goals,shots,shots_on_target,passes_completed,passes_attempted,tackles_won,interceptions,duels_won,duels_lost,rating').eq('match_id', match.id),
-    supabase.from('match_events').select('event_type').eq('match_id', match.id),
-    supabase.from('duels').select('outcome').eq('match_id', match.id)
+    supabase.from('match_events').select('event_type,occurred_at_seconds,pitch_y').eq('match_id', match.id),
+    supabase.from('duels').select('outcome,occurred_at_seconds,pitch_y').eq('match_id', match.id)
   ]);
   const stats = statsResult.data ?? [];
   const events = eventsResult.data ?? [];
@@ -651,6 +690,7 @@ async function renderPostGameReport(match) {
   document.getElementById('analysisFocus').replaceChildren(...focus.slice(0, 3).map(finding => createFinding(finding, true)));
   document.getElementById('analysisPlanTitle').textContent = `Suggested focus: ${focus[0].title.toLowerCase()}`;
   document.getElementById('analysisPlanText').textContent = focus[0].plan;
+  renderMomentumTracker(match, events, duels);
 }
 async function syncPlayerMatchStats() {
   if (!currentMatch) return;

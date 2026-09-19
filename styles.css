@@ -253,6 +253,7 @@ h2{font-size:17px;letter-spacing:-.55px;margin-bottom:0}
 
 .report-hero p,.manager-head p{color:#b6c7bd;margin:7px 0 0;font-size:11px}
 .analysis-match-select{border:1px solid rgba(255,255,255,.25);border-radius:7px;background:#214735;color:#fff;padding:10px;font:700 10px Manrope;max-width:220px}
+.momentum-panel{margin:20px 0}.momentum-summary{margin:7px 0 14px;color:#718078;font-size:10px;line-height:1.5}.momentum-bars{height:122px;display:grid;grid-template-columns:repeat(6,1fr);gap:8px;align-items:center;border-bottom:1px solid #dce6df;background:linear-gradient(#f8fbf8 49%,#dce6df 50%,#f8fbf8 51%);padding:8px 9px 0;border-radius:7px 7px 0 0}.momentum-bar{height:100%;display:grid;grid-template-rows:1fr 1fr;justify-items:center;min-width:0}.momentum-bar i{display:block;width:100%;max-width:34px;min-height:2px}.momentum-bar .attack{align-self:end;background:#59b675;border-radius:5px 5px 0 0}.momentum-bar .defend{align-self:start;background:#e9904b;border-radius:0 0 5px 5px}.momentum-bar small{grid-row:3;color:#7a887f;font:8px "DM Mono";margin-top:6px;white-space:nowrap}.momentum-key{display:flex;gap:14px;margin-top:10px;color:#718078;font-size:9px}.momentum-key span{display:flex;align-items:center;gap:5px}.momentum-key i{display:inline-block;width:9px;height:7px;border-radius:2px}.momentum-key .attack{background:#59b675}.momentum-key .defend{background:#e9904b}
 
 .report-score{margin:20px 0;display:grid;grid-template-columns:170px 1fr 170px;background:#fff;border:1px solid var(--line);border-radius:11px}
 
