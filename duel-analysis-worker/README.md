@@ -19,6 +19,8 @@ The listener makes only outbound HTTPS connections to Supabase. It does not expo
 
 The local Ollama model is a candidate finder, not an official stat source: it saves only a specific, timed ball contest for coach review before using it as training data or a match event. A 2.5-hour match creates roughly 900 model windows at the default coverage settings, so let the Legion run it overnight with Docker and Ollama open.
 
+When `OLLAMA_MODEL=qwen2.5vl:7b`, Touchline automatically sends three reduced-size chronological frames. This is intentional: it fits the model in Ollama's default local context while preserving enough time information for a short contest review.
+
 From this folder, build the image and run the scan. Replace the two Windows paths with your source file and destination folder:
 
 ```powershell
