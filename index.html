@@ -620,13 +620,13 @@
 <div>
 <p class="eyebrow">Video analysis · MVP</p>
 <h2>Upload a duel clip</h2>
-<p>Upload a short clip (up to 50 MB). It is stored privately and queued for analysis.</p>
+<p>Upload one short clip or select multiple scanner results (50 MB each). They stay private and queue for coach review.</p>
 </div>
 <form id="duelClipForm">
 <select id="duelClipMatch" required>
 <option value="">Choose match</option>
 </select>
-<input id="duelClipFile" type="file" accept="video/mp4,video/quicktime,video/webm" required>
+<input id="duelClipFile" type="file" accept="video/mp4,video/quicktime,video/webm" multiple required>
 <input id="duelClipNote" type="text" maxlength="160" placeholder="Optional: what should we look at?">
 <button type="submit">Queue analysis</button>
 </form>

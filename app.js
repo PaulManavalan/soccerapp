@@ -992,21 +992,11 @@ document.getElementById('duelLogForm').addEventListener('submit', async event =>
   marker.dataset.zone = zone.label; status.textContent = `Duel added at ${timeLabel(payload.occurred_at_seconds)}.`; event.target.reset(); updateTotal(); renderDetail(marker); filterMarkers(); await syncPlayerMatchStats(); renderManagerView();
 });
 
-document.getElementById('duelClipForm').addEventListener('submit', async event => {
-  event.preventDefault();
-  const status = document.getElementById('duelClipStatus');
-  const matchId = document.getElementById('duelClipMatch').value;
-  const file = document.getElementById('duelClipFile').files[0];
-  const note = document.getElementById('duelClipNote').value.trim() || null;
-  if (!currentUser || !currentTeam || !matchId || !file) return;
-  if (!file.type.startsWith('video/')) { status.textContent = 'Choose a video file.'; status.classList.add('is-error'); return; }
-  if (file.size > 50 * 1024 * 1024) { status.textContent = 'Keep MVP clips to 50 MB or less.'; status.classList.add('is-error'); return; }
+async function queueDuelClip(file, matchId, note) {
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
   const storagePath = `${currentTeam.id}/${currentUser.id}/${crypto.randomUUID()}-${safeName}`;
-  status.classList.remove('is-error'); status.textContent = 'Uploading private clip…';
   const { error: uploadError } = await supabase.storage.from('duel-clips').upload(storagePath, file, { contentType: file.type, upsert: false });
-  if (uploadError) { status.textContent = uploadError.message; status.classList.add('is-error'); return; }
-  status.textContent = 'Adding clip to analysis queue…';
+  if (uploadError) throw uploadError;
   const { data: job, error: jobError } = await supabase.from('duel_clip_jobs').insert({
     team_id: currentTeam.id,
     match_id: matchId,
@@ -1019,11 +1009,35 @@ document.getElementById('duelClipForm').addEventListener('submit', async event =
   }).select('id').single();
   if (jobError) {
     await supabase.storage.from('duel-clips').remove([storagePath]);
-    status.textContent = jobError.message; status.classList.add('is-error'); return;
+    throw jobError;
+  }
+  await supabase.functions.invoke('start-duel-analysis', { body: { jobId: job.id } });
+}
+
+document.getElementById('duelClipForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const status = document.getElementById('duelClipStatus');
+  const matchId = document.getElementById('duelClipMatch').value;
+  const files = Array.from(document.getElementById('duelClipFile').files);
+  const note = document.getElementById('duelClipNote').value.trim() || null;
+  if (!currentUser || !currentTeam || !matchId || !files.length) return;
+  const invalidFile = files.find(file => !file.type.startsWith('video/') || file.size > 50 * 1024 * 1024);
+  if (invalidFile) { status.textContent = `${invalidFile.name} is not a supported video under 50 MB.`; status.classList.add('is-error'); return; }
+  status.classList.remove('is-error');
+  let queued = 0;
+  const failures = [];
+  for (const [index, file] of files.entries()) {
+    status.textContent = `Uploading ${index + 1} of ${files.length}: ${file.name}`;
+    try {
+      await queueDuelClip(file, matchId, note);
+      queued += 1;
+    } catch (error) {
+      failures.push(`${file.name}: ${error.message || 'upload failed'}`);
+    }
   }
   event.target.reset();
-  const { error: startError } = await supabase.functions.invoke('start-duel-analysis', { body: { jobId: job.id } });
-  status.textContent = startError ? 'Clip queued. It will start automatically once the vision worker is deployed.' : 'Clip uploaded and analysis started.';
+  status.textContent = failures.length ? `${queued} queued; ${failures.length} failed. ${failures[0]}` : `${queued} clip${queued === 1 ? '' : 's'} queued for analysis.`;
+  status.classList.toggle('is-error', Boolean(failures.length));
   await loadDuelClipWorkspace();
 });
 
