@@ -655,26 +655,20 @@ async function loadMatchDuels() {
   const { data: savedDuels, error } = await supabase.from('duels').select('id,match_id,player_id,occurred_at_seconds,pitch_x,pitch_y,duel_type,outcome,suggested_outcome,confidence,review_status').eq('match_id', selectedDuelMatchId);
   if (error) return;
   matchDuels = savedDuels ?? [];
+  const markerPositions = new Map();
   savedDuels.forEach(duel => {
-    const marker = markers.find(item => {
-      const [minutes, seconds] = item.dataset.time.split(':').map(Number);
-      return minutes * 60 + seconds === duel.occurred_at_seconds;
-    });
+    // Short clips frequently receive the same detected timestamp (often 0).
+    // A timestamp is not a unique duel identifier, so render every saved row.
     const player = roster.find(item => item.id === duel.player_id);
-    if (!marker) { const createdMarker = createMarkerFromDuel(duel, player); if (!selected) selected = createdMarker; return; }
-    marker.dataset.duelId = duel.id;
-    marker.dataset.matchId = duel.match_id;
-    marker.dataset.playerId = duel.player_id || '';
-    marker.dataset.outcome = duel.outcome;
-    marker.dataset.type = duel.duel_type;
-    marker.dataset.initialOutcome = duel.suggested_outcome || duel.outcome;
-    marker.dataset.confidence = duel.confidence ?? marker.dataset.confidence;
-    marker.dataset.confirmed = duel.review_status === 'suggested' ? '' : 'true';
-    marker.classList.toggle('won', duel.outcome === 'won');
-    marker.classList.toggle('lost', duel.outcome === 'lost');
-    marker.classList.toggle('ground', duel.duel_type === 'ground');
-    marker.classList.toggle('aerial', duel.duel_type === 'aerial');
-    if (player) { marker.dataset.player = player.name; marker.dataset.number = player.shirt_number; }
+    const createdMarker = createMarkerFromDuel(duel, player);
+    const positionKey = `${duel.pitch_x}:${duel.pitch_y}`;
+    const stackIndex = markerPositions.get(positionKey) || 0;
+    markerPositions.set(positionKey, stackIndex + 1);
+    // Keep identical predictions selectable instead of drawing them exactly on
+    // top of each other. The stored pitch location is left untouched.
+    createdMarker.style.setProperty('--stack-x', `${(stackIndex % 3 - 1) * 11}px`);
+    createdMarker.style.setProperty('--stack-y', `${(Math.floor(stackIndex / 3) - 1) * 11}px`);
+    if (!selected) selected = createdMarker;
   });
   updateTotal();
   filterMarkers();
