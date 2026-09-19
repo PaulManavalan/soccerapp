@@ -30,6 +30,17 @@ docker run --rm --env-file .env --add-host=host.docker.internal:host-gateway -v 
 
 The output folder contains `duel-*.mp4` candidate clips and `duel-candidates.jsonl`, which records the estimated timestamp, type, confidence, and model note for every scanned window. The default threshold is 50; the scanner also rejects a model answer without a specific moment inside the window, so generic repeated answers cannot create hundreds of clips.
 
+## Experimental local tracking calibration
+
+`cv_duel_candidates.py` is a separate, local-only experiment. It tracks people and the ball with a general object detector and writes conservative **review candidates** to JSON; it does not send video anywhere, create duel events, decide who won, or claim that a candidate is a duel. It is intended for calibration against coach-confirmed examples before it is connected to Touchline.
+
+```powershell
+docker build -t touchline-duel-worker .
+docker run --rm -v "C:\path\to\short-clip.mp4:/input/test.mp4:ro" -v "C:\path\to\output:/output" touchline-duel-worker python cv_duel_candidates.py /input/test.mp4 --output /output --imgsz 1280
+```
+
+The output includes `cv-duel-candidates.json` and `cv-duel-diagnostics.json`. Candidates marked `needsBallReview: true` are only close opposing players with no ball confirmation. Do not use this experiment as a source of match stats until it has passed a representative calibration set.
+
 ## Deploy to Cloud Run
 
 From this folder, after authenticating with the Google Cloud CLI:

@@ -16,6 +16,9 @@ clips/
 *.mov
 *.m4v
 
+# Local Docker build logs
+duel-analysis-worker/docker-*.log
+
 # Editor and operating-system files
 .DS_Store
 Thumbs.db
