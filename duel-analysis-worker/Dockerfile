@@ -11,6 +11,6 @@ RUN apt-get update \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY main.py local_poller.py .
+COPY main.py local_poller.py batch_scan.py .
 
 CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT}

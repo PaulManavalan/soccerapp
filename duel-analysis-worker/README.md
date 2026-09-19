@@ -13,6 +13,21 @@ It is deliberately conservative: a player is only selected when the model can ma
 
 The listener makes only outbound HTTPS connections to Supabase. It does not expose your laptop to the internet and does not need Cloudflare Tunnel.
 
+## Scan a full match locally
+
+`batch_scan.py` is for building a review set from a full match file. It scans the complete game in overlapping windows and saves only **likely** one-on-one duels to a local folder. It does not upload the match, extracted clips, or results to Hudl or Supabase.
+
+The local Ollama model is a candidate finder, not an official stat source: review each saved clip before using it as training data or a match event. A 2.5-hour match creates roughly 900 model windows at the default coverage settings, so let the Legion run it overnight with Docker and Ollama open.
+
+From this folder, build the image and run the scan. Replace the two Windows paths with your source file and destination folder:
+
+```powershell
+docker build -t touchline-duel-worker .
+docker run --rm --env-file .env --add-host=host.docker.internal:host-gateway -v "C:\path\to\match.mp4:/input/match.mp4:ro" -v "C:\path\to\Touchline Duel Clips:/output" touchline-duel-worker python batch_scan.py /input/match.mp4 --output /output
+```
+
+The output folder contains `duel-*.mp4` candidate clips and `duel-candidates.jsonl`, which records the estimated timestamp, type, confidence, and model note for every scanned window. Use `--threshold 70` for fewer, stricter candidates or `--threshold 50` for broader recall.
+
 ## Deploy to Cloud Run
 
 From this folder, after authenticating with the Google Cloud CLI:
