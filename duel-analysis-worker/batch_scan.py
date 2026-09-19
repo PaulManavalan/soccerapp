@@ -35,13 +35,15 @@ def extract_clip(source: Path, start: float, duration: float, destination: Path)
 
 
 def candidate_prompt() -> str:
-    return """You are reviewing chronological frames from one short high-school soccer video window.
-Identify whether any actual one-on-one duel occurs: two opposing players physically contest the ball through a tackle, dribble challenge, loose-ball contest, or aerial/header contest. Do not mark an ordinary pass interception, an uncontested bad pass, routine pressure without a ball contest, or players merely close together as a duel.
+    return """You are screening chronological frames from one short high-school soccer video window for a coach to review.
+This is a HIGH-RECALL candidate finder: prefer a possible contest over missing a real duel. Set isDuel true whenever the frames plausibly show two opposing players contesting the ball through a tackle attempt, a dribble challenge, a loose-ball race, or an aerial/header challenge. If the ball is small, distant, briefly obscured, or the contact is uncertain, still set isDuel true when the players' movement plausibly indicates a contest; give it a lower confidence.
+
+Set isDuel false only when the action is clearly uncontested: a routine pass, one player alone with the ball, a clear break in play, or no meaningful player-to-player challenge. False positives are acceptable because the coach will review each saved clip.
 
 Return JSON only with this exact shape:
 {"isDuel":true,"duelType":"ground or aerial","confidence":0,"momentOffsetSeconds":0,"note":"brief reason"}
 
-Set isDuel to false unless the contest is genuinely visible. For false, still supply duelType as "ground", confidence 0, and momentOffsetSeconds 0. Confidence must be 0-100. momentOffsetSeconds is the estimated time after the start of this window where the contest occurs."""
+For false, still supply duelType as "ground", confidence 0, and momentOffsetSeconds 0. Confidence must be 0-100: use 20-49 for a plausible but unclear contest, 50-74 for likely, and 75-100 only when clear. momentOffsetSeconds is the estimated time after the start of this window where the contest occurs."""
 
 
 def assess_candidate(frames: list[Path]) -> dict:
@@ -141,7 +143,7 @@ def main() -> None:
     parser.add_argument("--window", type=float, default=14, help="Seconds analyzed per model call (default: 14)")
     parser.add_argument("--stride", type=float, default=10, help="Seconds between windows; must not exceed window (default: 10)")
     parser.add_argument("--clip-length", type=float, default=10, help="Length of each saved candidate clip (default: 10)")
-    parser.add_argument("--threshold", type=int, default=60, help="Minimum model confidence to save a candidate (default: 60)")
+    parser.add_argument("--threshold", type=int, default=30, help="Minimum model confidence to save a coach-review candidate (default: 30)")
     args = parser.parse_args()
     scan(args.source, args.output, args.window, args.stride, args.clip_length, args.threshold)
 
