@@ -495,8 +495,8 @@ function renderLiveStats() {
   document.getElementById('livePassDetail').textContent = totalPasses ? `${completedPasses} / ${totalPasses} completed` : 'Complete / attempted passes';
 }
 function heatmapActions(playerId = null, scope = 'all') {
-  const events = scope === 'duels' ? [] : matchEvents.filter(event => !playerId || event.player_id === playerId).map(event => ({ x: event.pitch_x, y: event.pitch_y }));
-  const duels = scope === 'events' ? [] : matchDuels.filter(duel => !playerId || duel.player_id === playerId).map(duel => ({ x: duel.pitch_x, y: duel.pitch_y }));
+  const events = scope === 'duels' ? [] : matchEvents.filter(event => (!playerId || event.player_id === playerId) && (scope !== 'turnovers' || event.event_type === 'possession_lost')).map(event => ({ x: event.pitch_x, y: event.pitch_y }));
+  const duels = scope === 'events' ? [] : matchDuels.filter(duel => (!playerId || duel.player_id === playerId) && (scope !== 'turnovers' || duel.outcome === 'lost')).map(duel => ({ x: duel.pitch_x, y: duel.pitch_y }));
   return [...events, ...duels].filter(action => Number.isFinite(Number(action.x)) && Number.isFinite(Number(action.y)));
 }
 function renderHeatmap(containerId, emptyId, actions, emptyMessage) {
@@ -528,8 +528,14 @@ function renderTeamHeatmap() {
   const scope = document.getElementById('teamHeatmapScope')?.value || 'all';
   const actions = heatmapActions(null, scope);
   renderHeatmap('teamHeatmap', 'teamHeatmapEmpty', actions, 'Log actions to build your ball heatmap.');
-  const summary = document.querySelector('.heatmap-panel .panel-foot p');
-  if (summary) summary.innerHTML = actions.length ? `<b>${actions.length}</b> logged action${actions.length === 1 ? '' : 's'} shown on the field.` : 'Log an event or duel to start the heatmap.';
+  const summary = document.getElementById('teamHeatmapSummary');
+  if (summary) summary.innerHTML = actions.length ? `<b>${actions.length}</b> ${scope === 'turnovers' ? 'turnover' : 'logged action'}${actions.length === 1 ? '' : 's'} shown on the field.` : `No ${scope === 'turnovers' ? 'turnovers' : 'actions'} logged yet.`;
+  const turnoverCounts = new Map();
+  matchEvents.filter(event => event.event_type === 'possession_lost').forEach(event => turnoverCounts.set(event.player_id, (turnoverCounts.get(event.player_id) || 0) + 1));
+  matchDuels.filter(duel => duel.outcome === 'lost').forEach(duel => turnoverCounts.set(duel.player_id, (turnoverCounts.get(duel.player_id) || 0) + 1));
+  const leaders = [...turnoverCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([playerId, total]) => `${roster.find(player => player.id === playerId)?.name || 'Unassigned'} ${total}`);
+  const turnoverSummary = document.getElementById('turnoverLeaders');
+  if (turnoverSummary) turnoverSummary.textContent = leaders.length ? `Turnovers: ${leaders.join(' · ')}` : 'No turnovers logged.';
 }
 function renderPlayerHeatmap(playerId, playerName) {
   renderHeatmap('playerHeatmap', 'playerHeatmapEmpty', heatmapActions(playerId), `${playerName || 'This player'} has no logged actions yet.`);

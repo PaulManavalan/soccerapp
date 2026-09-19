@@ -219,6 +219,7 @@ h2{font-size:17px;letter-spacing:-.55px;margin-bottom:0}
 .panel-foot{display:flex;justify-content:space-between;align-items:center;padding-top:15px}
 
 .panel-foot p{margin:0;color:#758179;font-size:10px}
+.panel-foot .turnover-leaders{max-width:48%;text-align:right;color:#9b692f}
 
 .panel-foot b{color:#168a60}
 
@@ -521,6 +522,8 @@ main{padding:22px 16px}
 .pitch{height:220px}
 
 .panel-foot{display:block}
+
+.panel-foot .turnover-leaders{max-width:none;text-align:left;margin-top:9px}
 
 .panel-foot a{display:block;margin-top:9px}
 
