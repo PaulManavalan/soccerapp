@@ -38,6 +38,7 @@ let matchAppearances = [];
 let selectedManagerPlayerId = null;
 let matchClockInterval = null;
 let completedMatches = [];
+let teamMatches = [];
 let selectedReportMatchId = null;
 let pickingDuelLocation = false;
 let duelMatches = [];
@@ -137,7 +138,7 @@ async function loadTeamData() {
   renderEventPlayerOptions();
   updateMatchContext();
   await loadDuelMatchOptions();
-  await Promise.all([loadMatchDuels(), loadMatchEvents(), loadPostGameMatches(), loadDuelClipWorkspace()]);
+  await Promise.all([loadMatchDuels(), loadMatchEvents(), loadPostGameMatches(), loadMatchCenter(), loadDuelClipWorkspace()]);
 }
 async function loadDuelMatchOptions() {
   const select = document.getElementById('duelMatch');
@@ -670,6 +671,36 @@ async function syncPlayerMatchStats() {
 }
 function timeLabel(totalSeconds) {
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
+}
+async function loadMatchCenter() {
+  const list = document.getElementById('matchCenterList');
+  const count = document.getElementById('matchCenterCount');
+  if (!currentTeam) { teamMatches = []; count.textContent = '0 matches'; list.innerHTML = '<p class="empty-lineup">Create a team to see its matches.</p>'; return; }
+  const { data, error } = await supabase.from('matches').select('id,opponent_name,started_at,ended_at,status,team_score,opponent_score').eq('team_id', currentTeam.id).order('started_at', { ascending: false });
+  teamMatches = error ? [] : (data ?? []);
+  count.textContent = `${teamMatches.length} match${teamMatches.length === 1 ? '' : 'es'}`;
+  if (!teamMatches.length) { list.innerHTML = '<p class="empty-lineup">Your scheduled and completed matches will appear here.</p>'; return; }
+  list.innerHTML = teamMatches.map(match => {
+    const date = new Date(match.ended_at || match.started_at).toLocaleDateString();
+    const final = match.status === 'final';
+    const state = final ? `Final · ${match.team_score ?? 0}–${match.opponent_score ?? 0}` : match.status === 'live' ? 'Live now' : 'Scheduled';
+    return `<button type="button" class="match-center-card" data-open-match="${match.id}"><small>${date}</small><strong>vs. ${escapeHtml(match.opponent_name)}</strong><span class="${final ? 'match-final' : 'match-live'}">${state}</span></button>`;
+  }).join('');
+  list.querySelectorAll('[data-open-match]').forEach(button => button.addEventListener('click', async () => {
+    const match = teamMatches.find(item => item.id === button.dataset.openMatch);
+    if (!match) return;
+    if (match.status !== 'final') {
+      const status = document.getElementById('matchFormStatus');
+      status.classList.remove('is-error');
+      status.textContent = `${match.opponent_name} is ${match.status === 'live' ? 'currently live' : 'scheduled'} for ${new Date(match.started_at).toLocaleString()}.`;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    selectedReportMatchId = match.id;
+    document.getElementById('analysisMatchSelect').value = match.id;
+    activateTab('analysis');
+    await renderPostGameReport(match);
+  }));
 }
 function locationLabel(x, y) {
   const third = y < 34 ? 'Attacking third' : y > 66 ? 'Defensive third' : 'Central third';
