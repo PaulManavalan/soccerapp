@@ -55,9 +55,11 @@ body{margin:0;background:var(--canvas);color:var(--ink);font:14px Manrope,Arial,
 .club-card button{margin-left:auto;border:0;background:none;color:var(--muted)}
 .team-switcher{margin-left:auto;max-width:104px;border:1px solid #dce5de;background:#f8fbf8;border-radius:5px;padding:6px 18px 6px 7px;color:#496457;font:700 9px Manrope}.team-switcher:disabled{opacity:.75}
 
-.profile{border-top:1px solid var(--line);padding:16px 10px 0;display:flex;align-items:center;gap:9px;color:var(--ink);text-decoration:none}
+.profile{border:0;border-top:1px solid var(--line);padding:16px 10px 0;width:100%;display:flex;align-items:center;gap:9px;color:var(--ink);background:transparent;text-align:left;cursor:pointer}
+.profile:hover{color:#357d51}
+.profile:focus-visible{outline:2px solid #8ccfa4;outline-offset:3px;border-radius:6px}
 
-.profile b{margin-left:auto;font-size:12px}
+.profile-more{margin-left:auto;font-size:12px;letter-spacing:1px}
 
 .avatar{background:#d8e5df;border-radius:50%;width:30px;height:30px;display:grid;place-items:center;font-size:10px;font-weight:700}
 
