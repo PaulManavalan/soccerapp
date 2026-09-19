@@ -225,6 +225,22 @@
 <option value="left-defensive">Left defensive third</option>
 <option value="right-defensive">Right defensive third</option>
 </select>
+<select id="eventLogShotTarget" aria-label="Shot placement">
+<option value="">Shot placement (optional)</option>
+<option value="top-left">Upper left</option>
+<option value="top-center">Upper center</option>
+<option value="top-right">Upper right</option>
+<option value="middle-left">Middle left</option>
+<option value="middle-center">Middle center</option>
+<option value="middle-right">Middle right</option>
+<option value="bottom-left">Lower left</option>
+<option value="bottom-center">Lower center</option>
+<option value="bottom-right">Lower right</option>
+<option value="off-left">Off target · wide left</option>
+<option value="off-right">Off target · wide right</option>
+<option value="off-high">Off target · over</option>
+<option value="off-low">Off target · low</option>
+</select>
 <input id="eventLogNotes" type="text" maxlength="240" placeholder="Optional note">
 <button type="submit">Log event</button>
 </form>
@@ -338,6 +354,18 @@
 <p id="momentumSummary" class="momentum-summary">Logged attacking actions and defensive work will show the match’s momentum swings.</p>
 <div id="momentumBars" class="momentum-bars" aria-label="Match momentum by 15 minute period"></div>
 <div class="momentum-key"><span><i class="attack"></i> Attacking momentum</span><span><i class="defend"></i> Defensive workload</span></div>
+</section>
+<section class="panel shot-map-panel" aria-labelledby="shotMapTitle">
+<div class="panel-heading">
+<div>
+<p class="eyebrow">Finishing review</p>
+<h2 id="shotMapTitle">Shot placement</h2>
+</div>
+<span id="shotMapStatus" class="status watch">No shots logged</span>
+</div>
+<p id="shotMapSummary" class="momentum-summary">When logging a shot, choose its placement to see where attempts finished.</p>
+<div id="shotGoal" class="shot-goal" aria-label="Shot placement in the goal"><p id="shotGoalEmpty" class="shot-goal-empty">No shot placement data yet.</p></div>
+<div class="shot-key"><span><i class="on-target"></i> On target / goal</span><span><i class="off-target"></i> Off target</span></div>
 </section>
 <section class="analysis-grid">
 <article class="panel">

@@ -591,6 +591,31 @@ function setReportEmpty() {
   document.getElementById('momentumStatus').className = 'status watch';
   document.getElementById('momentumSummary').textContent = 'Logged attacking actions and defensive work will show the match’s momentum swings.';
   document.getElementById('momentumBars').replaceChildren();
+  document.getElementById('shotMapStatus').textContent = 'No shots logged';
+  document.getElementById('shotMapStatus').className = 'status watch';
+  document.getElementById('shotMapSummary').textContent = 'When logging a shot, choose its placement to see where attempts finished.';
+  document.getElementById('shotGoal').querySelectorAll('.shot-dot').forEach(dot => dot.remove());
+  document.getElementById('shotGoalEmpty').hidden = false;
+}
+const shotTargetLocations = { 'top-left': [18, 18], 'top-center': [50, 15], 'top-right': [82, 18], 'middle-left': [18, 50], 'middle-center': [50, 50], 'middle-right': [82, 50], 'bottom-left': [18, 82], 'bottom-center': [50, 85], 'bottom-right': [82, 82], 'off-left': [-4, 50], 'off-right': [104, 50], 'off-high': [50, -5], 'off-low': [50, 105] };
+function shotTargetFromNote(note) { return String(note || '').match(/\[shot-target:([\w-]+)\]/)?.[1] || ''; }
+function renderShotPlacement(events) {
+  const shots = events.filter(event => ['goal', 'shot_on_target', 'shot_off_target'].includes(event.event_type));
+  const plotted = shots.filter(event => shotTargetLocations[shotTargetFromNote(event.notes)]);
+  const goal = document.getElementById('shotGoal');
+  goal.querySelectorAll('.shot-dot').forEach(dot => dot.remove());
+  const empty = document.getElementById('shotGoalEmpty');
+  empty.hidden = plotted.length > 0;
+  plotted.forEach(event => {
+    const [x, y] = shotTargetLocations[shotTargetFromNote(event.notes)];
+    const dot = document.createElement('i'); dot.className = `shot-dot ${event.event_type === 'shot_off_target' ? 'off' : 'on'}`;
+    dot.style.left = `${x}%`; dot.style.top = `${y}%`; dot.title = eventLabels[event.event_type]; goal.append(dot);
+  });
+  const onTarget = shots.filter(event => event.event_type !== 'shot_off_target').length;
+  const offTarget = shots.filter(event => event.event_type === 'shot_off_target').length;
+  document.getElementById('shotMapStatus').textContent = `${onTarget} on · ${offTarget} off`;
+  document.getElementById('shotMapStatus').className = `status ${shots.length ? 'good' : 'watch'}`;
+  document.getElementById('shotMapSummary').textContent = plotted.length ? `${plotted.length} of ${shots.length} logged shots include a placement. Green is on target; orange is off target.` : shots.length ? `${shots.length} shots logged; add a placement to future shots to map them here.` : 'When logging a shot, choose its placement to see where attempts finished.';
 }
 function renderMomentumTracker(match, events, duels) {
   const bars = document.getElementById('momentumBars');
@@ -641,7 +666,7 @@ async function renderPostGameReport(match) {
   if (!match) { setReportEmpty(); return; }
   const [statsResult, eventsResult, duelsResult] = await Promise.all([
     supabase.from('player_match_stats').select('player_id,goals,shots,shots_on_target,passes_completed,passes_attempted,tackles_won,interceptions,duels_won,duels_lost,rating').eq('match_id', match.id),
-    supabase.from('match_events').select('event_type,occurred_at_seconds,pitch_y').eq('match_id', match.id),
+    supabase.from('match_events').select('event_type,occurred_at_seconds,pitch_y,notes').eq('match_id', match.id),
     supabase.from('duels').select('outcome,occurred_at_seconds,pitch_y').eq('match_id', match.id)
   ]);
   const stats = statsResult.data ?? [];
@@ -691,6 +716,7 @@ async function renderPostGameReport(match) {
   document.getElementById('analysisPlanTitle').textContent = `Suggested focus: ${focus[0].title.toLowerCase()}`;
   document.getElementById('analysisPlanText').textContent = focus[0].plan;
   renderMomentumTracker(match, events, duels);
+  renderShotPlacement(events);
 }
 async function syncPlayerMatchStats() {
   if (!currentMatch) return;
@@ -1167,7 +1193,11 @@ document.getElementById('eventLogForm').addEventListener('submit', async event =
   const occurredAtSeconds = getMatchClockSeconds();
   const zoneMap = { central: { x: 50, y: 50 }, 'left-attacking': { x: 24, y: 27 }, 'right-attacking': { x: 76, y: 27 }, 'left-defensive': { x: 24, y: 74 }, 'right-defensive': { x: 76, y: 74 } };
   const zone = zoneMap[document.getElementById('eventLogZone').value];
-  const payload = { match_id: currentMatch.id, player_id: playerId, event_type: document.getElementById('eventLogType').value, occurred_at_seconds: occurredAtSeconds, pitch_x: zone.x, pitch_y: zone.y, notes: document.getElementById('eventLogNotes').value.trim() || null };
+  const eventType = document.getElementById('eventLogType').value;
+  const shotTarget = document.getElementById('eventLogShotTarget').value;
+  const rawNotes = document.getElementById('eventLogNotes').value.trim();
+  const notes = ['goal', 'shot_on_target', 'shot_off_target'].includes(eventType) && shotTarget ? `[shot-target:${shotTarget}]${rawNotes ? ` ${rawNotes}` : ''}` : rawNotes || null;
+  const payload = { match_id: currentMatch.id, player_id: playerId, event_type: eventType, occurred_at_seconds: occurredAtSeconds, pitch_x: zone.x, pitch_y: zone.y, notes };
   if (!getEventPlayers().some(player => player.id === playerId)) { status.textContent = 'That player is not currently eligible to log an action.'; status.classList.add('is-error'); return; }
   status.classList.remove('is-error'); status.textContent = 'Saving event…';
   const eventsToSave = [payload];
