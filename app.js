@@ -1221,7 +1221,16 @@ document.querySelector('a[href="#squad"]')?.addEventListener('click', event => {
 document.querySelector('a[href="#reports"]')?.addEventListener('click', event => { event.preventDefault(); activateTab('analysis'); });
 document.querySelector('.match-banner .match-button')?.addEventListener('click', () => activateTab('match'));
 document.querySelector('.manager-head .match-button')?.addEventListener('click', () => { activateTab('manager'); document.querySelector('.bench-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
-document.querySelector('.insight-card a[href="#tactics"]')?.addEventListener('click', event => { event.preventDefault(); activateTab('analysis'); });
+document.querySelector('.insight-card a[href="#tactics"]')?.addEventListener('click', event => { event.preventDefault(); activateTab('analysis'); setTimeout(() => document.querySelector('.action-plan')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); });
+document.getElementById('buildSessionButton').addEventListener('click', () => {
+  const focus = document.getElementById('analysisPlanTitle').textContent.replace(/^Suggested focus:\s*/i, '') || 'Match review';
+  const detail = document.getElementById('analysisPlanText').textContent;
+  const session = document.getElementById('trainingSession');
+  document.getElementById('trainingSessionTitle').textContent = `${focus} · 70-minute session`;
+  document.getElementById('trainingSessionSteps').innerHTML = `<li><b>10 min · Arrival & review</b><br>Show one match clip or event sequence that frames the focus: ${escapeHtml(focus)}.</li><li><b>20 min · Technical activation</b><br>Use a focused passing, receiving, and decision-making exercise connected to the problem.</li><li><b>25 min · Main practice</b><br>${escapeHtml(detail)}</li><li><b>15 min · Conditioned game</b><br>Play a score-based small-sided game that rewards the target behavior and review it with the group.</li>`;
+  session.hidden = false;
+  session.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
 document.getElementById('teamHeatmapScope').addEventListener('change', renderTeamHeatmap);
 document.querySelectorAll('.formation-player').forEach(player => player.addEventListener('click', () => { document.querySelectorAll('.formation-player').forEach(item => item.classList.remove('active')); player.classList.add('active'); const data = player.dataset; const card = document.getElementById('selectedPlayer'); card.querySelector('.selected-number').textContent = data.number; card.querySelector('.eyebrow').textContent = data.position; card.querySelector('h2').innerHTML = `${data.name} <span>${data.rating}</span>`; card.querySelector('small').textContent = `${data.minutes} minutes played`; document.getElementById('statMinutes').textContent = `${data.minutes}'`; document.getElementById('statPasses').textContent = data.passes; document.getElementById('statShots').textContent = data.shots; document.getElementById('statTackles').textContent = data.tackles; }));
 markers.forEach(marker => { applyStored(marker); attachDuelMarker(marker); }); filters.forEach(id => document.getElementById(id).addEventListener('change', filterMarkers));
