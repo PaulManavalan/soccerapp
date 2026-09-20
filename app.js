@@ -685,10 +685,15 @@ async function loadDuelClipWorkspace() {
     calibrationProgress.textContent = 'Build a 10-clip calibration set after creating a team and match.';
     return;
   }
-  const [matchesResult, jobsResult] = await Promise.all([
+  const [matchesResult, initialJobsResult] = await Promise.all([
     supabase.from('matches').select('id,opponent_name,started_at,status').eq('team_id', currentTeam.id).order('started_at', { ascending: false }),
     supabase.from('duel_clip_jobs').select('id,match_id,storage_path,original_filename,status,created_at,suggested_player_id,suggested_type,suggested_outcome,confidence,duel_id').eq('team_id', currentTeam.id).order('created_at', { ascending: false }).limit(50),
   ]);
+  // Older Supabase installations may have the upload queue but not its later
+  // optional duel link. Keep saved clips visible while the migration catches up.
+  const jobsResult = initialJobsResult.error && /duel_id/i.test(initialJobsResult.error.message || '')
+    ? await supabase.from('duel_clip_jobs').select('id,match_id,storage_path,original_filename,status,created_at,suggested_player_id,suggested_type,suggested_outcome,confidence').eq('team_id', currentTeam.id).order('created_at', { ascending: false }).limit(50)
+    : initialJobsResult;
   const matches = matchesResult.data ?? [];
   matchSelect.innerHTML = matches.length
     ? `<option value="">Choose match</option>${matches.map(match => `<option value="${match.id}" ${match.id === currentMatch?.id ? 'selected' : ''}>vs. ${escapeHtml(match.opponent_name)} · ${new Date(match.started_at).toLocaleDateString()}</option>`).join('')}`
@@ -698,7 +703,8 @@ async function loadDuelClipWorkspace() {
   const linkedCount = duelClipJobs.filter(job => job.duel_id).length;
   calibrationProgress.textContent = `${linkedCount} of 10 clips linked to a duel event. Clear ground, aerial, won, and lost examples make the set more useful.`;
   if (jobsResult.error) {
-    jobsContainer.innerHTML = '<p class="empty-lineup">Run the clip-analysis database setup before uploading clips.</p>';
+    calibrationProgress.textContent = 'Your clip queue could not reload.';
+    jobsContainer.innerHTML = `<p class="empty-lineup">Queue reload failed: ${escapeHtml(jobsResult.error.message)}.</p>`;
     return;
   }
   jobsContainer.innerHTML = duelClipJobs.length ? duelClipJobs.map(job => {
