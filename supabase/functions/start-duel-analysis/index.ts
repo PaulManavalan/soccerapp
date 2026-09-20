@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type' };
+const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info' };
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const defaultProjectKey = (legacyName: string, currentName: string) => {
   const legacy = Deno.env.get(legacyName);
