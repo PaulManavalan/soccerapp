@@ -14,6 +14,7 @@ from main import (
     assess_frames,
     download_clip,
     extract_frames,
+    frame_sampling_settings,
     report_failure,
     send_callback,
 )
@@ -102,8 +103,9 @@ async def process_job(client: httpx.AsyncClient, url: str, key: str, callback: s
             frames_dir.mkdir()
             await update_progress(client, url, key, job["id"], 10, "Downloading private clip")
             await download_clip(str(request.clipUrl), video_path)
-            await update_progress(client, url, key, job["id"], 35, "Extracting review frames")
-            frames = await asyncio.to_thread(extract_frames, video_path, frames_dir)
+            max_frames, frame_width = frame_sampling_settings()
+            await update_progress(client, url, key, job["id"], 35, f"Extracting {max_frames} review frames")
+            frames = await asyncio.to_thread(extract_frames, video_path, frames_dir, max_frames, frame_width)
             await update_progress(client, url, key, job["id"], 60, f"Analyzing {len(frames)} frames with local Qwen")
             result = await asyncio.to_thread(assess_frames, frames, request.roster)
             await update_progress(client, url, key, job["id"], 90, "Saving coach-review suggestion")
