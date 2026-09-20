@@ -709,10 +709,12 @@ async function loadDuelClipWorkspace() {
   }
   jobsContainer.innerHTML = duelClipJobs.length ? duelClipJobs.map(job => {
     const statusLabel = job.status === 'complete' ? 'Suggestion ready' : job.status === 'failed' ? 'Needs attention' : job.status === 'analyzing' ? 'Analyzing clip' : 'Queued for analysis';
-    const suggestion = job.status === 'complete' ? `${job.suggested_type || 'Duel'} · ${job.suggested_outcome || 'review'}${job.confidence ? ` · ${job.confidence}%` : ''}` : job.status === 'failed' ? (job.worker_note || 'Analysis did not finish. Restart the local listener, then retry.') : 'Video is private to your team.';
+    const progress = /^progress:(\d+):(.*)$/s.exec(job.worker_note || '');
+    const suggestion = job.status === 'complete' ? `${job.suggested_type || 'Duel'} · ${job.suggested_outcome || 'review'}${job.confidence ? ` · ${job.confidence}%` : ''}` : job.status === 'failed' ? (job.worker_note || 'Analysis did not finish. Restart the local listener, then retry.') : progress ? progress[2].trim() : 'Video is private to your team.';
+    const progressBar = progress ? `<div class="clip-progress" aria-label="Analysis progress"><i style="width:${Math.max(0, Math.min(100, Number(progress[1])))}%"></i></div>` : '';
     const reviewButton = job.duel_id ? `<button class="change-duel" type="button" data-review-clip="${job.id}">Review duel</button>` : '';
     const retryButton = job.status === 'failed' ? `<button class="change-duel" type="button" data-retry-clip="${job.id}">Retry locally</button>` : '';
-    return `<div class="clip-job"><div><strong>${escapeHtml(job.original_filename)}</strong><small>${escapeHtml(suggestion)}</small></div><span class="status ${job.status === 'complete' ? 'good' : job.status === 'failed' ? 'watch' : ''}">${statusLabel}</span>${reviewButton}${retryButton}<button class="delete-clip" type="button" data-delete-clip="${job.id}" ${job.status === 'analyzing' ? 'disabled title="Wait for analysis to finish"' : ''}>Remove</button></div>`;
+    return `<div class="clip-job"><div><strong>${escapeHtml(job.original_filename)}</strong><small>${escapeHtml(suggestion)}</small>${progressBar}</div><span class="status ${job.status === 'complete' ? 'good' : job.status === 'failed' ? 'watch' : ''}">${statusLabel}</span>${reviewButton}${retryButton}<button class="delete-clip" type="button" data-delete-clip="${job.id}" ${job.status === 'analyzing' ? 'disabled title="Wait for analysis to finish"' : ''}>Remove</button></div>`;
   }).join('') : '<p class="empty-lineup">No uploaded clips yet.</p>';
   jobsContainer.querySelectorAll('[data-delete-clip]').forEach(button => button.addEventListener('click', async () => {
     const job = duelClipJobs.find(item => item.id === button.dataset.deleteClip);
@@ -743,6 +745,10 @@ async function loadDuelClipWorkspace() {
     const marker = markers.find(item => item.dataset.duelId === job.duel_id);
     if (marker) { renderDetail(marker); marker.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
   }));
+  if (duelClipJobs.some(job => job.status === 'queued' || job.status === 'analyzing')) {
+    window.clearTimeout(window.touchlineClipRefreshTimer);
+    window.touchlineClipRefreshTimer = window.setTimeout(() => loadDuelClipWorkspace(), 4000);
+  }
 }
 async function initialiseAuth() {
   const { data, error } = await supabase.auth.getSession();

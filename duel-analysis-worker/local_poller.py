@@ -79,6 +79,15 @@ async def calibration_for_team(client: httpx.AsyncClient, url: str, key: str, te
     return rows[0] if rows else None
 
 
+async def update_progress(client: httpx.AsyncClient, url: str, key: str, job_id: str, percent: int, message: str) -> None:
+    """Store a lightweight local-worker milestone for the coach's queue UI."""
+    response = await client.patch(
+        f"{url}/rest/v1/duel_clip_jobs", params={"id": f"eq.{job_id}"},
+        json={"worker_note": f"progress:{max(0, min(100, percent))}:{message}"}, headers=headers(key),
+    )
+    response.raise_for_status()
+
+
 async def process_job(client: httpx.AsyncClient, url: str, key: str, callback: str, job: dict) -> None:
     request = AnalysisRequest(
         jobId=job["id"], teamId=job["team_id"], matchId=job["match_id"],
@@ -91,9 +100,13 @@ async def process_job(client: httpx.AsyncClient, url: str, key: str, callback: s
             video_path = temp / "clip.mp4"
             frames_dir = temp / "frames"
             frames_dir.mkdir()
+            await update_progress(client, url, key, job["id"], 10, "Downloading private clip")
             await download_clip(str(request.clipUrl), video_path)
+            await update_progress(client, url, key, job["id"], 35, "Extracting review frames")
             frames = await asyncio.to_thread(extract_frames, video_path, frames_dir)
+            await update_progress(client, url, key, job["id"], 60, f"Analyzing {len(frames)} frames with local Qwen")
             result = await asyncio.to_thread(assess_frames, frames, request.roster)
+            await update_progress(client, url, key, job["id"], 90, "Saving coach-review suggestion")
             await send_callback(request, result)
     except Exception as error:
         await report_failure(request, str(error))

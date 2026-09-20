@@ -154,7 +154,9 @@ def assess_frames_ollama(frames: list[Path], roster: list[RosterPlayer]) -> dict
         "options": {"temperature": 0.1},
     }
     response = httpx.post(f"{host}/api/generate", json=body, timeout=180.0)
-    response.raise_for_status()
+    if not response.is_success:
+        detail = response.text.strip().replace("\n", " ")[:450]
+        raise RuntimeError(f"Ollama rejected {len(frames)} frames for {body['model']} ({response.status_code}): {detail or 'no error details returned'}")
     return normalize_result(parse_model_json(response.json().get("response", "")), roster)
 
 
