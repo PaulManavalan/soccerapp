@@ -149,20 +149,43 @@ def assess_frames_ollama(frames: list[Path], roster: list[RosterPlayer]) -> dict
         "model": os.environ.get("OLLAMA_MODEL", "gemma3"),
         "prompt": analysis_prompt(roster),
         "images": [frame_base64(frame).removeprefix("data:image/jpeg;base64,") for frame in frames],
-        "format": "json",
+        "format": {
+            "type": "object",
+            "properties": {
+                "playerId": {"type": ["string", "null"]},
+                "duelType": {"type": "string", "enum": ["ground", "aerial"]},
+                "outcome": {"type": "string", "enum": ["won", "lost"]},
+                "confidence": {"type": "number"},
+                "occurredAtSeconds": {"type": "number"},
+                "frameX": {"type": "number"},
+                "frameY": {"type": "number"},
+                "pitchX": {"type": "number"},
+                "pitchY": {"type": "number"},
+                "note": {"type": "string"},
+            },
+            "required": ["playerId", "duelType", "outcome", "confidence", "occurredAtSeconds", "frameX", "frameY", "pitchX", "pitchY", "note"],
+        },
+        "think": False,
         "stream": False,
         "options": {
             "temperature": 0.1,
             # Qwen vision frames plus the roster need more than Ollama's
             # default 4k context. 8k preserves three review frames.
-            "num_ctx": max(4096, int(os.environ.get("OLLAMA_CONTEXT_TOKENS", "8192"))),
+            "num_ctx": max(4096, int(os.environ.get("OLLAMA_CONTEXT_TOKENS", "8192"))), "num_predict": 180,
         },
     }
     response = httpx.post(f"{host}/api/generate", json=body, timeout=180.0)
     if not response.is_success:
         detail = response.text.strip().replace("\n", " ")[:450]
         raise RuntimeError(f"Ollama rejected {len(frames)} frames for {body['model']} ({response.status_code}): {detail or 'no error details returned'}")
-    return normalize_result(parse_model_json(response.json().get("response", "")), roster)
+    response_data = response.json()
+    # Current Qwen3-VL builds can place schema-constrained output in
+    # `thinking` while leaving `response` blank, even with think=false.
+    raw_response = response_data.get("response") or response_data.get("thinking", "")
+    try:
+        return normalize_result(parse_model_json(raw_response), roster)
+    except RuntimeError as error:
+        raise RuntimeError(f"{error}: {str(raw_response)[:450] or 'model returned an empty response'}") from error
 
 
 def assess_frames(frames: list[Path], roster: list[RosterPlayer]) -> dict:
