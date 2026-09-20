@@ -27,7 +27,7 @@ Deno.serve(async request => {
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return Response.json({ error: 'Sign in required' }, { status: 401, headers: corsHeaders });
 
-  const { jobId } = await request.json().catch(() => ({}));
+  const { jobId, retry } = await request.json().catch(() => ({}));
   if (!jobId) return Response.json({ error: 'jobId is required' }, { status: 400, headers: corsHeaders });
   const { data: job, error: jobError } = await userClient
     .from('duel_clip_jobs')
@@ -36,6 +36,18 @@ Deno.serve(async request => {
     .single();
   if (jobError || !job) return Response.json({ error: 'Clip job was not found' }, { status: 404, headers: corsHeaders });
   if (job.status === 'complete') return Response.json({ status: 'complete' }, { headers: corsHeaders });
+
+  // A private local listener can only claim queued work. Let the coach retry a
+  // failed clip without re-uploading its private video or granting browser
+  // clients general update permission on the queue table.
+  if (retry && job.status === 'failed') {
+    const admin = createClient(supabaseUrl, serviceRoleKey);
+    const { error: retryError } = await admin.from('duel_clip_jobs')
+      .update({ status: 'queued', worker_note: null, updated_at: new Date().toISOString() })
+      .eq('id', job.id);
+    if (retryError) return Response.json({ error: 'Unable to requeue this clip' }, { status: 500, headers: corsHeaders });
+    return Response.json({ status: 'queued' }, { headers: corsHeaders });
+  }
 
   const workerUrl = Deno.env.get('DUEL_ANALYSIS_WORKER_URL');
   const workerSecret = Deno.env.get('DUEL_ANALYSIS_WORKER_SECRET');

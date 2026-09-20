@@ -687,12 +687,12 @@ async function loadDuelClipWorkspace() {
   }
   const [matchesResult, initialJobsResult] = await Promise.all([
     supabase.from('matches').select('id,opponent_name,started_at,status').eq('team_id', currentTeam.id).order('started_at', { ascending: false }),
-    supabase.from('duel_clip_jobs').select('id,match_id,storage_path,original_filename,status,created_at,suggested_player_id,suggested_type,suggested_outcome,confidence,duel_id').eq('team_id', currentTeam.id).order('created_at', { ascending: false }).limit(50),
+    supabase.from('duel_clip_jobs').select('id,match_id,storage_path,original_filename,status,created_at,suggested_player_id,suggested_type,suggested_outcome,confidence,duel_id,worker_note').eq('team_id', currentTeam.id).order('created_at', { ascending: false }).limit(50),
   ]);
   // Older Supabase installations may have the upload queue but not its later
   // optional duel link. Keep saved clips visible while the migration catches up.
   const jobsResult = initialJobsResult.error && /duel_id/i.test(initialJobsResult.error.message || '')
-    ? await supabase.from('duel_clip_jobs').select('id,match_id,storage_path,original_filename,status,created_at,suggested_player_id,suggested_type,suggested_outcome,confidence').eq('team_id', currentTeam.id).order('created_at', { ascending: false }).limit(50)
+    ? await supabase.from('duel_clip_jobs').select('id,match_id,storage_path,original_filename,status,created_at,suggested_player_id,suggested_type,suggested_outcome,confidence,worker_note').eq('team_id', currentTeam.id).order('created_at', { ascending: false }).limit(50)
     : initialJobsResult;
   const matches = matchesResult.data ?? [];
   matchSelect.innerHTML = matches.length
@@ -709,9 +709,10 @@ async function loadDuelClipWorkspace() {
   }
   jobsContainer.innerHTML = duelClipJobs.length ? duelClipJobs.map(job => {
     const statusLabel = job.status === 'complete' ? 'Suggestion ready' : job.status === 'failed' ? 'Needs attention' : job.status === 'analyzing' ? 'Analyzing clip' : 'Queued for analysis';
-    const suggestion = job.status === 'complete' ? `${job.suggested_type || 'Duel'} · ${job.suggested_outcome || 'review'}${job.confidence ? ` · ${job.confidence}%` : ''}` : 'Video is private to your team.';
+    const suggestion = job.status === 'complete' ? `${job.suggested_type || 'Duel'} · ${job.suggested_outcome || 'review'}${job.confidence ? ` · ${job.confidence}%` : ''}` : job.status === 'failed' ? (job.worker_note || 'Analysis did not finish. Restart the local listener, then retry.') : 'Video is private to your team.';
     const reviewButton = job.duel_id ? `<button class="change-duel" type="button" data-review-clip="${job.id}">Review duel</button>` : '';
-    return `<div class="clip-job"><div><strong>${escapeHtml(job.original_filename)}</strong><small>${escapeHtml(suggestion)}</small></div><span class="status ${job.status === 'complete' ? 'good' : job.status === 'failed' ? 'watch' : ''}">${statusLabel}</span>${reviewButton}<button class="delete-clip" type="button" data-delete-clip="${job.id}" ${job.status === 'analyzing' ? 'disabled title="Wait for analysis to finish"' : ''}>Remove</button></div>`;
+    const retryButton = job.status === 'failed' ? `<button class="change-duel" type="button" data-retry-clip="${job.id}">Retry locally</button>` : '';
+    return `<div class="clip-job"><div><strong>${escapeHtml(job.original_filename)}</strong><small>${escapeHtml(suggestion)}</small></div><span class="status ${job.status === 'complete' ? 'good' : job.status === 'failed' ? 'watch' : ''}">${statusLabel}</span>${reviewButton}${retryButton}<button class="delete-clip" type="button" data-delete-clip="${job.id}" ${job.status === 'analyzing' ? 'disabled title="Wait for analysis to finish"' : ''}>Remove</button></div>`;
   }).join('') : '<p class="empty-lineup">No uploaded clips yet.</p>';
   jobsContainer.querySelectorAll('[data-delete-clip]').forEach(button => button.addEventListener('click', async () => {
     const job = duelClipJobs.find(item => item.id === button.dataset.deleteClip);
@@ -723,6 +724,15 @@ async function loadDuelClipWorkspace() {
     const { error: jobError } = await supabase.from('duel_clip_jobs').delete().eq('id', job.id).eq('team_id', currentTeam.id);
     if (jobError) { status.textContent = `Video removed, but queue cleanup failed: ${jobError.message}`; status.classList.add('is-error'); return; }
     status.textContent = 'Clip removed.'; await loadDuelClipWorkspace();
+  }));
+  jobsContainer.querySelectorAll('[data-retry-clip]').forEach(button => button.addEventListener('click', async () => {
+    const status = document.getElementById('duelClipStatus');
+    button.disabled = true;
+    status.classList.remove('is-error'); status.textContent = 'Returning clip to the local queue…';
+    const { error } = await supabase.functions.invoke('start-duel-analysis', { body: { jobId: button.dataset.retryClip, retry: true } });
+    if (error) { status.textContent = error.message || 'Could not retry this clip.'; status.classList.add('is-error'); button.disabled = false; return; }
+    status.textContent = 'Queued again. Keep the local worker window open.';
+    await loadDuelClipWorkspace();
   }));
   jobsContainer.querySelectorAll('[data-review-clip]').forEach(button => button.addEventListener('click', async () => {
     const job = duelClipJobs.find(item => item.id === button.dataset.reviewClip);
