@@ -63,7 +63,7 @@ def assess_candidate(frames: list[Path]) -> dict:
             "images": [frame_base64(frame).removeprefix("data:image/jpeg;base64,") for frame in frames],
             "format": "json",
             "stream": False,
-            "options": {"temperature": 0.1},
+            "options": {"temperature": 0.1, "num_ctx": max(4096, int(os.environ.get("OLLAMA_CONTEXT_TOKENS", "8192")))},
         },
         timeout=240.0,
     )

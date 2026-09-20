@@ -151,7 +151,12 @@ def assess_frames_ollama(frames: list[Path], roster: list[RosterPlayer]) -> dict
         "images": [frame_base64(frame).removeprefix("data:image/jpeg;base64,") for frame in frames],
         "format": "json",
         "stream": False,
-        "options": {"temperature": 0.1},
+        "options": {
+            "temperature": 0.1,
+            # Qwen vision frames plus the roster need more than Ollama's
+            # default 4k context. 8k preserves three review frames.
+            "num_ctx": max(4096, int(os.environ.get("OLLAMA_CONTEXT_TOKENS", "8192"))),
+        },
     }
     response = httpx.post(f"{host}/api/generate", json=body, timeout=180.0)
     if not response.is_success:
