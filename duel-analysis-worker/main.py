@@ -172,7 +172,9 @@ def assess_frames(frames: list[Path], roster: list[RosterPlayer]) -> dict:
 def frame_sampling_settings() -> tuple[int, int]:
     """Keep Qwen within Ollama's default local context while preserving time cues."""
     model = os.environ.get("OLLAMA_MODEL", "").lower()
-    return (3, 512) if model.startswith("qwen2.5vl") else (MAX_FRAMES, 768)
+    # The roster and coaching prompt consume part of Ollama's 4k context too.
+    # 3×384px frames leave enough room while retaining before/during/after cues.
+    return (3, 384) if model.startswith("qwen2.5vl") else (MAX_FRAMES, 768)
 
 
 def apply_calibration(result: dict, calibration: dict | None) -> dict:

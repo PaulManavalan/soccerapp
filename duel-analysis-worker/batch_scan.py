@@ -85,7 +85,7 @@ def assess_candidate(frames: list[Path]) -> dict:
 def frame_sampling_settings() -> tuple[int, int]:
     import os
     model = os.environ.get("OLLAMA_MODEL", "").lower()
-    return (3, 512) if model.startswith("qwen2.5vl") else (8, 768)
+    return (3, 384) if model.startswith("qwen2.5vl") else (8, 768)
 
 
 def timestamp_label(seconds: float) -> str:
