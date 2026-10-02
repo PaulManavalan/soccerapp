@@ -93,6 +93,9 @@ def frame_base64(frame: Path) -> str:
 
 
 def parse_model_json(text: str) -> dict:
+    # Some local Qwen builds still include a reasoning block despite think=false.
+    # It is never part of the coach-facing structured assessment.
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     try:
         return json.loads(text)
     except json.JSONDecodeError:
@@ -104,12 +107,15 @@ def parse_model_json(text: str) -> dict:
 
 def analysis_prompt(roster: list[RosterPlayer]) -> str:
     roster_text = json.dumps([player.model_dump() for player in roster])
-    return f"""You are assisting a high-school soccer coach. Review these chronological frames from one short clip.
+    return f"""/no_think
+You are assisting a high-school soccer coach. Review these chronological frames from one short clip.
 Identify the single clearest one-on-one duel involving the coach's team, if one is visible. A ground duel includes a tackle, dribble challenge, or loose-ball contest. An aerial duel includes a header or other aerial contest.
 
 Outcome rules: ground = won only when the coach's team retains possession; aerial = won when the coach's team prevents meaningful opponent progression or wins the ball. Be conservative. Do not invent jersey numbers, names, or a player identity. Only select playerId when a roster player can be reasonably matched by visible shirt number or clearly readable name.
 
 Roster: {roster_text}
+
+Do not describe your reasoning, frame-by-frame analysis, or assumptions. Return the JSON object immediately.
 
 Return JSON only, with this exact shape:
 {{"playerId":"roster UUID or null","duelType":"ground or aerial","outcome":"won or lost","confidence":0,"occurredAtSeconds":0,"frameX":50,"frameY":50,"pitchX":50,"pitchY":50,"note":"brief uncertainty-aware coaching explanation"}}
@@ -171,7 +177,11 @@ def assess_frames_ollama(frames: list[Path], roster: list[RosterPlayer]) -> dict
             "temperature": 0.1,
             # Qwen vision frames plus the roster need more than Ollama's
             # default 4k context. 8k preserves three review frames.
-            "num_ctx": max(4096, int(os.environ.get("OLLAMA_CONTEXT_TOKENS", "8192"))), "num_predict": 180,
+            "num_ctx": max(4096, int(os.environ.get("OLLAMA_CONTEXT_TOKENS", "8192"))),
+            # Qwen3-VL can occasionally emit a reasoning preamble even when
+            # think=false. Leave room for the structured result; /no_think in
+            # the prompt asks the model to skip that preamble.
+            "num_predict": 1200,
         },
     }
     response = httpx.post(f"{host}/api/generate", json=body, timeout=180.0)
