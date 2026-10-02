@@ -111,10 +111,10 @@ async function loadTeamData() {
   if (playersError) return;
   roster = players ?? [];
   await loadCameraCalibration();
-  let { data: match, error: matchError } = await supabase.from('matches').select('id,opponent_name,started_at,status,clock_elapsed_seconds,clock_running,clock_started_at,ended_at,team_score,opponent_score').eq('team_id', currentTeam.id).in('status', ['live', 'scheduled']).order('started_at', { ascending: false }).limit(1).maybeSingle();
+  let { data: match, error: matchError } = await supabase.from('matches').select('id,opponent_name,started_at,status,clock_elapsed_seconds,clock_running,clock_started_at,ended_at,team_score,opponent_score,team_kit_color,opponent_kit_color,team_goalkeeper_kit_color,opponent_goalkeeper_kit_color').eq('team_id', currentTeam.id).in('status', ['live', 'scheduled']).order('started_at', { ascending: false }).limit(1).maybeSingle();
   if (matchError) {
     const { data: legacyMatch } = await supabase.from('matches').select('id,opponent_name,started_at,status').eq('team_id', currentTeam.id).in('status', ['live', 'scheduled']).order('started_at', { ascending: false }).limit(1).maybeSingle();
-    match = legacyMatch ? { ...legacyMatch, clock_elapsed_seconds: 0, clock_running: false, clock_started_at: null, ended_at: null, team_score: 0, opponent_score: 0 } : null;
+    match = legacyMatch ? { ...legacyMatch, clock_elapsed_seconds: 0, clock_running: false, clock_started_at: null, ended_at: null, team_score: 0, opponent_score: 0, team_kit_color: 'blue', opponent_kit_color: 'white', team_goalkeeper_kit_color: 'yellow', opponent_goalkeeper_kit_color: 'green' } : null;
   }
   currentMatch = match ?? null;
   activeLineupIds = new Set();
@@ -194,6 +194,10 @@ function renderMatchSetup() {
   const opponent = document.getElementById('matchOpponent');
   const kickoff = document.getElementById('matchKickoff');
   const matchStatus = document.getElementById('matchStatus');
+  const teamKitColor = document.getElementById('teamKitColor');
+  const opponentKitColor = document.getElementById('opponentKitColor');
+  const teamGoalkeeperKitColor = document.getElementById('teamGoalkeeperKitColor');
+  const opponentGoalkeeperKitColor = document.getElementById('opponentGoalkeeperKitColor');
   const submit = document.querySelector('#matchForm button[type="submit"]');
   if (!roster.length) picker.innerHTML = '<p class="empty-lineup">Your roster will appear here after team setup.</p>';
   else picker.innerHTML = roster.map(player => `<label class="lineup-choice"><input type="checkbox" value="${player.id}" ${activeLineupIds.has(player.id) ? 'checked' : ''}><strong>#${player.shirt_number} ${escapeHtml(player.name)}</strong><small>${escapeHtml(player.position || 'Player')}</small></label>`).join('');
@@ -204,6 +208,10 @@ function renderMatchSetup() {
     opponent.value = currentMatch.opponent_name;
     kickoff.value = new Date(currentMatch.started_at).toISOString().slice(0, 16);
     matchStatus.value = currentMatch.status;
+    teamKitColor.value = currentMatch.team_kit_color || 'blue';
+    opponentKitColor.value = currentMatch.opponent_kit_color || 'white';
+    teamGoalkeeperKitColor.value = currentMatch.team_goalkeeper_kit_color || 'yellow';
+    opponentGoalkeeperKitColor.value = currentMatch.opponent_goalkeeper_kit_color || 'green';
     submit.innerHTML = 'Save match changes <span>→</span>';
   } else submit.innerHTML = 'Create match <span>→</span>';
   document.querySelectorAll('#lineupPicker input').forEach(input => input.addEventListener('change', () => { input.checked ? activeLineupIds.add(input.value) : activeLineupIds.delete(input.value); count.textContent = `${activeLineupIds.size} selected`; renderManagerView(); }));
@@ -983,13 +991,18 @@ document.getElementById('matchForm').addEventListener('submit', async event => {
   const opponent = document.getElementById('matchOpponent').value.trim();
   const startedAt = document.getElementById('matchKickoff').value;
   const status = document.getElementById('matchStatus').value;
+  const teamKitColor = document.getElementById('teamKitColor').value.trim().toLowerCase();
+  const opponentKitColor = document.getElementById('opponentKitColor').value.trim().toLowerCase();
+  const teamGoalkeeperKitColor = document.getElementById('teamGoalkeeperKitColor').value.trim().toLowerCase();
+  const opponentGoalkeeperKitColor = document.getElementById('opponentGoalkeeperKitColor').value.trim().toLowerCase();
   const message = document.getElementById('matchFormStatus');
-  if (!currentTeam || !opponent || !startedAt || !activeLineupIds.size) { message.textContent = 'Choose an opponent, kickoff, and at least one active player.'; message.classList.add('is-error'); return; }
+  if (!currentTeam || !opponent || !startedAt || !activeLineupIds.size || !teamKitColor || !opponentKitColor || !teamGoalkeeperKitColor || !opponentGoalkeeperKitColor) { message.textContent = 'Choose an opponent, kickoff, kit colors, and at least one active player.'; message.classList.add('is-error'); return; }
   const isUpdate = Boolean(currentMatch);
   message.classList.remove('is-error'); message.textContent = isUpdate ? 'Saving match changes…' : 'Creating your match…';
+  const matchPayload = { opponent_name: opponent, started_at: new Date(startedAt).toISOString(), status, team_kit_color: teamKitColor, opponent_kit_color: opponentKitColor, team_goalkeeper_kit_color: teamGoalkeeperKitColor, opponent_goalkeeper_kit_color: opponentGoalkeeperKitColor };
   const matchRequest = isUpdate
-    ? supabase.from('matches').update({ opponent_name: opponent, started_at: new Date(startedAt).toISOString(), status }).eq('id', currentMatch.id).select().single()
-    : supabase.from('matches').insert({ team_id: currentTeam.id, opponent_name: opponent, started_at: new Date(startedAt).toISOString(), status }).select().single();
+    ? supabase.from('matches').update(matchPayload).eq('id', currentMatch.id).select().single()
+    : supabase.from('matches').insert({ team_id: currentTeam.id, ...matchPayload }).select().single();
   const { data: match, error: matchError } = await matchRequest;
   if (matchError) { message.textContent = matchError.message; message.classList.add('is-error'); return; }
   const lineup = [...activeLineupIds].map(player_id => ({ match_id: match.id, player_id }));

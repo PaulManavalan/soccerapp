@@ -61,6 +61,17 @@ Deno.serve(async request => {
     .eq('team_id', job.team_id)
     .order('shirt_number');
   if (rosterError) return Response.json({ error: 'Unable to prepare the team roster' }, { status: 500, headers: corsHeaders });
+  const { data: match } = await admin
+    .from('matches')
+    .select('team_kit_color,opponent_kit_color,team_goalkeeper_kit_color,opponent_goalkeeper_kit_color')
+    .eq('id', job.match_id)
+    .maybeSingle();
+  const kit = {
+    teamKitColor: match?.team_kit_color || 'blue',
+    opponentKitColor: match?.opponent_kit_color || 'white',
+    teamGoalkeeperKitColor: match?.team_goalkeeper_kit_color || 'yellow',
+    opponentGoalkeeperKitColor: match?.opponent_goalkeeper_kit_color || 'green',
+  };
   const { data: signed, error: signedError } = await admin.storage.from('duel-clips').createSignedUrl(job.storage_path, 900);
   if (signedError || !signed) return Response.json({ error: 'Unable to prepare the private clip' }, { status: 500, headers: corsHeaders });
 
@@ -78,6 +89,7 @@ Deno.serve(async request => {
         shirtNumber: player.shirt_number,
         position: player.position,
       })),
+      kit,
       callbackUrl: `${supabaseUrl}/functions/v1/complete-duel-analysis`,
     }),
   });

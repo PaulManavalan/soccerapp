@@ -40,6 +40,7 @@ class AnalysisRequest(BaseModel):
     clipUrl: HttpUrl
     callbackUrl: HttpUrl
     roster: list[RosterPlayer] = Field(default_factory=list)
+    kit: dict[str, str] = Field(default_factory=dict)
     calibration: dict | None = None
 
 
@@ -105,11 +106,18 @@ def parse_model_json(text: str) -> dict:
         return json.loads(match.group(0))
 
 
-def analysis_prompt(roster: list[RosterPlayer]) -> str:
+def analysis_prompt(roster: list[RosterPlayer], kit: dict[str, str] | None = None) -> str:
     roster_text = json.dumps([player.model_dump() for player in roster])
+    kit = kit or {}
+    team_kit = kit.get("teamKitColor", "blue")
+    opponent_kit = kit.get("opponentKitColor", "white")
+    team_goalkeeper_kit = kit.get("teamGoalkeeperKitColor", "yellow")
+    opponent_goalkeeper_kit = kit.get("opponentGoalkeeperKitColor", "green")
     return f"""/no_think
 You are assisting a high-school soccer coach. Review these chronological frames from one short clip.
 Identify the single clearest one-on-one duel involving the coach's team, if one is visible. A ground duel includes a tackle, dribble challenge, or loose-ball contest. An aerial duel includes a header or other aerial contest.
+
+Team identity: the coach's outfield team wears {team_kit}; their goalkeeper wears {team_goalkeeper_kit}. The opponent outfield team wears {opponent_kit}; their goalkeeper wears {opponent_goalkeeper_kit}. Treat these as the authoritative kit colors; do not guess which team is the coach's team.
 
 Outcome rules: ground = won only when the coach's team retains possession; aerial = won when the coach's team prevents meaningful opponent progression or wins the ball. Be conservative. Do not invent jersey numbers, names, or a player identity. Only select playerId when a roster player can be reasonably matched by visible shirt number or clearly readable name.
 
@@ -136,11 +144,11 @@ def normalize_result(result: dict, roster: list[RosterPlayer]) -> dict:
     return result
 
 
-def assess_frames_openai(frames: list[Path], roster: list[RosterPlayer]) -> dict:
+def assess_frames_openai(frames: list[Path], roster: list[RosterPlayer], kit: dict[str, str] | None = None) -> dict:
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured")
-    content = [{"type": "input_text", "text": analysis_prompt(roster)}]
+    content = [{"type": "input_text", "text": analysis_prompt(roster, kit)}]
     content.extend({"type": "input_image", "image_url": frame_base64(frame), "detail": "low"} for frame in frames)
     response = OpenAI(api_key=api_key).responses.create(
         model=os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
@@ -149,11 +157,11 @@ def assess_frames_openai(frames: list[Path], roster: list[RosterPlayer]) -> dict
     return normalize_result(parse_model_json(response.output_text), roster)
 
 
-def assess_frames_ollama(frames: list[Path], roster: list[RosterPlayer]) -> dict:
+def assess_frames_ollama(frames: list[Path], roster: list[RosterPlayer], kit: dict[str, str] | None = None) -> dict:
     host = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
     body = {
         "model": os.environ.get("OLLAMA_MODEL", "gemma3"),
-        "prompt": analysis_prompt(roster),
+        "prompt": analysis_prompt(roster, kit),
         "images": [frame_base64(frame).removeprefix("data:image/jpeg;base64,") for frame in frames],
         "format": {
             "type": "object",
@@ -198,12 +206,12 @@ def assess_frames_ollama(frames: list[Path], roster: list[RosterPlayer]) -> dict
         raise RuntimeError(f"{error}: {str(raw_response)[:450] or 'model returned an empty response'}") from error
 
 
-def assess_frames(frames: list[Path], roster: list[RosterPlayer]) -> dict:
+def assess_frames(frames: list[Path], roster: list[RosterPlayer], kit: dict[str, str] | None = None) -> dict:
     provider = os.environ.get("ANALYSIS_PROVIDER", "ollama").lower()
     if provider == "ollama":
-        return assess_frames_ollama(frames, roster)
+        return assess_frames_ollama(frames, roster, kit)
     if provider == "openai":
-        return assess_frames_openai(frames, roster)
+        return assess_frames_openai(frames, roster, kit)
     raise RuntimeError("ANALYSIS_PROVIDER must be 'ollama' or 'openai'")
 
 
@@ -264,7 +272,7 @@ async def analyze(request: AnalysisRequest, x_worker_secret: str | None = Header
             await download_clip(str(request.clipUrl), video_path)
             max_frames, frame_width = frame_sampling_settings()
             frames = await asyncio.to_thread(extract_frames, video_path, frames_dir, max_frames, frame_width)
-            result = apply_calibration(await asyncio.to_thread(assess_frames, frames, request.roster), request.calibration)
+            result = apply_calibration(await asyncio.to_thread(assess_frames, frames, request.roster, request.kit), request.calibration)
             await send_callback(request, result)
         return {"accepted": True, "jobId": request.jobId}
     except Exception as error:

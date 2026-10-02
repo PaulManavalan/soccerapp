@@ -80,6 +80,27 @@ async def calibration_for_team(client: httpx.AsyncClient, url: str, key: str, te
     return rows[0] if rows else None
 
 
+async def kit_for_match(client: httpx.AsyncClient, url: str, key: str, match_id: str) -> dict[str, str]:
+    defaults = {
+        "teamKitColor": "blue", "opponentKitColor": "white",
+        "teamGoalkeeperKitColor": "yellow", "opponentGoalkeeperKitColor": "green",
+    }
+    response = await client.get(
+        f"{url}/rest/v1/matches",
+        params={"select": "team_kit_color,opponent_kit_color,team_goalkeeper_kit_color,opponent_goalkeeper_kit_color", "id": f"eq.{match_id}"},
+        headers=headers(key),
+    )
+    if not response.is_success or not response.json():
+        return defaults
+    match = response.json()[0]
+    return {
+        "teamKitColor": match.get("team_kit_color") or defaults["teamKitColor"],
+        "opponentKitColor": match.get("opponent_kit_color") or defaults["opponentKitColor"],
+        "teamGoalkeeperKitColor": match.get("team_goalkeeper_kit_color") or defaults["teamGoalkeeperKitColor"],
+        "opponentGoalkeeperKitColor": match.get("opponent_goalkeeper_kit_color") or defaults["opponentGoalkeeperKitColor"],
+    }
+
+
 async def update_progress(client: httpx.AsyncClient, url: str, key: str, job_id: str, percent: int, message: str) -> None:
     """Store a lightweight local-worker milestone for the coach's queue UI."""
     response = await client.patch(
@@ -93,7 +114,9 @@ async def process_job(client: httpx.AsyncClient, url: str, key: str, callback: s
     request = AnalysisRequest(
         jobId=job["id"], teamId=job["team_id"], matchId=job["match_id"],
         clipUrl=await signed_clip_url(client, url, key, job["storage_path"]), callbackUrl=callback,
-        roster=await roster_for_team(client, url, key, job["team_id"]), calibration=await calibration_for_team(client, url, key, job["team_id"]),
+        roster=await roster_for_team(client, url, key, job["team_id"]),
+        kit=await kit_for_match(client, url, key, job["match_id"]),
+        calibration=await calibration_for_team(client, url, key, job["team_id"]),
     )
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -107,7 +130,7 @@ async def process_job(client: httpx.AsyncClient, url: str, key: str, callback: s
             await update_progress(client, url, key, job["id"], 35, f"Extracting {max_frames} review frames")
             frames = await asyncio.to_thread(extract_frames, video_path, frames_dir, max_frames, frame_width)
             await update_progress(client, url, key, job["id"], 60, f"Analyzing {len(frames)} frames with local Qwen")
-            result = await asyncio.to_thread(assess_frames, frames, request.roster)
+            result = await asyncio.to_thread(assess_frames, frames, request.roster, request.kit)
             await update_progress(client, url, key, job["id"], 90, "Saving coach-review suggestion")
             await send_callback(request, result)
     except Exception as error:
